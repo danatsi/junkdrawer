@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Junk Drawer — design mock</title>
+<link href="https://fonts.googleapis.com/css2?family=Lora:wght@500&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  html {
+    background: #F1ECE2;
+    color-scheme: light;
+  }
+  body {
+    margin: 0;
+    background: #F1ECE2;
+    font-family: 'Inter', -apple-system, sans-serif;
+    color: #2A241C;
+    display: flex;
+    justify-content: center;
+  }
+  .screen {
+    width: 100%;
+    max-width: 420px;
+    min-height: 100vh;
+    position: relative;
+  }
+  .header {
+    padding: 20px 20px 14px;
+  }
+  .wordmark {
+    font-family: 'Lora', serif;
+    font-size: 20px;
+    margin-bottom: 16px;
+  }
+  .chips {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+  .chip {
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    padding: 4px 12px;
+    border-radius: 20px;
+    white-space: nowrap;
+    cursor: pointer;
+    border: 0.5px solid #DDD3C2;
+    background: transparent;
+    color: #6B5F4F;
+  }
+  .chip.active {
+    background: #9C5A22;
+    color: #F8F0E4;
+    border: none;
+  }
+  .row {
+    border-top: 0.5px solid #DDD3C2;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 14px 20px;
+  }
+  .row.screenshot-row { cursor: pointer; }
+  .row-link {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    gap: 12px;
+    text-decoration: none;
+    color: inherit;
+  }
+  .row-body {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    gap: 12px;
+  }
+  .thumb {
+    width: 40px;
+    height: 40px;
+    border-radius: 6px;
+    background: #E4DBC9;
+    flex-shrink: 0;
+  }
+  .thumb.screenshot-thumb {
+    background: linear-gradient(160deg, #D9C9A8, #B99B6B);
+  }
+  .title-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .title {
+    font-family: 'Lora', serif;
+    font-size: 15px;
+    color: #2A241C;
+  }
+  .score {
+    background: #F8F0E4;
+    color: #9C5A22;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 2px 7px;
+    border-radius: 5px;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+  }
+  .meta {
+    font-size: 12px;
+    color: #6B5F4F;
+    margin-top: 2px;
+  }
+  .meta .tag-watch, .meta .tag-screenshot { color: #9C5A22; }
+  .actions {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding-top: 2px;
+  }
+  .icon-btn {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    display: flex;
+    color: #6B5F4F;
+  }
+  .chevron {
+    transition: transform 0.25s ease;
+  }
+  .chevron.open {
+    transform: rotate(180deg);
+  }
+  .panel {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+    padding: 0 20px;
+  }
+  .panel-inner {
+    padding: 10px 0 14px 52px;
+    font-size: 13px;
+    color: #6B5F4F;
+    line-height: 1.6;
+  }
+  .panel-inner.with-thumb {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+  }
+  .panel-thumb {
+    width: 56px;
+    height: 56px;
+    border-radius: 8px;
+    background: linear-gradient(160deg, #D9C9A8, #B99B6B);
+    flex-shrink: 0;
+    cursor: pointer;
+  }
+  .trailer-link {
+    display: inline-block;
+    margin-top: 8px;
+    color: #9C5A22;
+    text-decoration: none;
+    font-size: 13px;
+  }
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(20, 16, 10, 0.82);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+  }
+  .overlay.visible { display: flex; }
+  .overlay-close {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    color: #F1ECE2;
+    font-size: 26px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .overlay-img {
+    width: 82%;
+    max-width: 340px;
+    aspect-ratio: 9 / 16;
+    border-radius: 12px;
+    background: linear-gradient(160deg, #D9C9A8, #B99B6B);
+    box-shadow: 0 12px 34px rgba(0,0,0,0.45);
+  }
+</style>
+</head>
+<body>
+<div class="screen">
+  <div class="header">
+    <div class="wordmark">Junk Drawer</div>
+    <div class="chips" id="chips"></div>
+  </div>
+  <div id="rows"></div>
+
+  <div class="overlay" id="overlay">
+    <div class="overlay-close" id="overlay-close">&times;</div>
+    <div class="overlay-img"></div>
+  </div>
+</div>
+
+<script>
+const items = [
+  {
+    type: 'link', id: '1', title: 'The Bear, season 3', domain: 'variety.com', tag: 'watch',
+    url: 'https://variety.com', note: "Her recommendation from Sunday.",
+    description: "A young chef returns home to run his family's Chicago sandwich shop after a family tragedy.",
+    imdbRating: '8.7', trailerUrl: 'https://www.youtube.com/watch?v=example'
+  },
+  {
+    type: 'screenshot', id: '2', title: 'Recipe screenshot from a story', domain: 'screenshot', tag: 'screenshot',
+    note: null,
+    description: 'Extracted: "Lemon ricotta pasta — 500g pasta, 250g ricotta, zest of 2 lemons, parmesan, black pepper." Saved from an Instagram story.',
+    shareText: 'Recipe screenshot from a story'
+  },
+  {
+    type: 'link', id: '3', title: 'Wool overshirt, camel', domain: 'zara.com', tag: 'shopping',
+    url: 'https://www.zara.com', note: 'Compare to the Uniqlo one before buying.',
+    description: null, imdbRating: null, trailerUrl: null
+  },
+  {
+    type: 'link', id: '4', title: 'Braised short rib with polenta', domain: 'bonappetit.com', tag: 'recipe',
+    url: 'https://www.bonappetit.com', note: 'For dinner Saturday, start 4hrs ahead.',
+    description: null, imdbRating: null, trailerUrl: null
+  },
+  {
+    type: 'link', id: '5', title: 'Dune: Part Two', domain: 'imdb.com', tag: 'watch',
+    url: 'https://www.imdb.com', note: null,
+    description: 'Paul Atreides unites with the Fremen to seek revenge against the conspirators who destroyed his family.',
+    imdbRating: '8.5', trailerUrl: 'https://www.youtube.com/watch?v=example2'
+  },
+  {
+    type: 'link', id: '6', title: 'Standing desk, oak top', domain: 'made.com', tag: 'shopping',
+    url: 'https://www.made.com', note: null,
+    description: null, imdbRating: null, trailerUrl: null
+  }
+];
+
+const CHEVRON_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
+const STAR_SVG = '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="12 2 15 9 22 9.5 17 14.5 18.5 22 12 18 5.5 22 7 14.5 2 9.5 9 9"/></svg>';
+const WHATSAPP_SVG = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2a10 10 0 0 0-8.6 15L2 22l5.2-1.4A10 10 0 1 0 12 2Zm0 18.2a8.15 8.15 0 0 1-4.2-1.2l-.3-.2-3.1.8.8-3-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.4-.7-1.7-.8-.2-.1-.4-.1-.5.1-.2.2-.6.8-.8 1-.1.2-.3.2-.5.1-.2-.1-1-.4-1.9-1.2-.7-.6-1.2-1.4-1.3-1.6-.1-.2 0-.4.1-.5l.4-.4c.1-.1.2-.3.2-.4.1-.1.1-.3 0-.4-.1-.1-.5-1.2-.7-1.7-.2-.4-.4-.4-.5-.4h-.5c-.2 0-.4.1-.6.3-.2.2-.8.8-.8 1.9s.8 2.2.9 2.3c.1.2 1.6 2.5 3.9 3.5.5.2 1 .4 1.3.5.5.2 1 .1 1.4.1.4-.1 1.4-.6 1.6-1.1.2-.5.2-1 .1-1.1-.1-.1-.2-.2-.4-.3Z"/></svg>';
+
+let activeTag = 'all';
+const overlay = document.getElementById('overlay');
+
+function render() {
+  renderChips();
+  renderRows();
+}
+
+function renderChips() {
+  const tags = ['all', ...new Set(items.map(i => i.tag))];
+  const chipsEl = document.getElementById('chips');
+  chipsEl.innerHTML = '';
+  tags.forEach(tag => {
+    const chip = document.createElement('button');
+    chip.className = 'chip' + (tag === activeTag ? ' active' : '');
+    chip.textContent = tag;
+    chip.addEventListener('click', () => { activeTag = tag; render(); });
+    chipsEl.appendChild(chip);
+  });
+}
+
+// Shares an image via the Web Share API (files array), since wa.me can only
+// pre-fill text and cannot attach a file. Falls back to an explanatory alert
+// if the browser doesn't support file sharing. Title/text left empty per the
+// iOS quirk noted in the spec (non-empty title can make some targets, notably
+// WhatsApp, fall back to sharing as text instead of the file).
+async function shareScreenshot(placeholderLabel) {
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = 360; canvas.height = 640;
+    const ctx = canvas.getContext('2d');
+    const gradient = ctx.createLinearGradient(0, 0, 360, 640);
+    gradient.addColorStop(0, '#D9C9A8');
+    gradient.addColorStop(1, '#B99B6B');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 360, 640);
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+    const file = new File([blob], 'screenshot.jpg', { type: 'image/jpeg' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file] });
+    } else {
+      alert('This browser doesn\'t support sharing files directly — on a real device with WhatsApp installed, this opens the share sheet with the image attached.');
+    }
+  } catch (err) {
+    if (err.name !== 'AbortError') {
+      alert('Share sheet unavailable here — this works on a real iOS device with WhatsApp installed.');
+    }
+  }
+}
+
+function renderRows() {
+  const container = document.getElementById('rows');
+  container.innerHTML = '';
+  const visible = activeTag === 'all' ? items : items.filter(i => i.tag === activeTag);
+
+  visible.forEach(item => {
+    if (item.type === 'link') {
+      renderLinkRow(container, item);
+    } else {
+      renderScreenshotRow(container, item);
+    }
+  });
+}
+
+function renderLinkRow(container, link) {
+  const hasPanel = Boolean(link.note || link.description);
+
+  const row = document.createElement('div');
+  row.className = 'row';
+  row.innerHTML = `
+    <a class="row-link" href="${link.url}" target="_blank" rel="noopener noreferrer">
+      <div class="thumb"></div>
+      <div style="flex:1; min-width:0;">
+        <div class="title-line">
+          <span class="title">${link.title}</span>
+          ${link.imdbRating ? `<span class="score">${STAR_SVG}${link.imdbRating}</span>` : ''}
+        </div>
+        <div class="meta">${link.domain} · <span class="${link.tag === 'watch' ? 'tag-watch' : ''}">${link.tag}</span></div>
+      </div>
+    </a>
+    <div class="actions">
+      <a class="icon-btn" href="https://wa.me/?text=${encodeURIComponent(link.title + ' ' + link.url)}" target="_blank" rel="noopener noreferrer" aria-label="Share via WhatsApp">${WHATSAPP_SVG}</a>
+      <button class="icon-btn chevron" aria-label="Expand details" aria-expanded="false" ${hasPanel ? '' : 'style="visibility:hidden;pointer-events:none;" aria-hidden="true" tabindex="-1"'}>${CHEVRON_SVG}</button>
+    </div>
+  `;
+
+  row.querySelector('.icon-btn[aria-label="Share via WhatsApp"]').addEventListener('click', e => e.stopPropagation());
+
+  if (hasPanel) {
+    const panel = document.createElement('div');
+    panel.className = 'panel';
+    panel.innerHTML = `<div class="panel-inner">
+      ${link.description ? `<div>${link.description}</div>` : ''}
+      ${link.note ? `<div style="margin-top:${link.description ? '6px' : '0'}">${link.note}</div>` : ''}
+      ${link.trailerUrl ? `<a class="trailer-link" href="${link.trailerUrl}" target="_blank" rel="noopener noreferrer">Watch trailer</a>` : ''}
+    </div>`;
+
+    const chevronBtn = row.querySelector('.chevron');
+    chevronBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      e.preventDefault();
+      const isOpen = chevronBtn.classList.contains('open');
+      chevronBtn.classList.toggle('open', !isOpen);
+      chevronBtn.setAttribute('aria-expanded', String(!isOpen));
+      panel.style.maxHeight = isOpen ? '0px' : panel.querySelector('.panel-inner').scrollHeight + 'px';
+    });
+
+    container.appendChild(row);
+    container.appendChild(panel);
+  } else {
+    container.appendChild(row);
+  }
+}
+
+function renderScreenshotRow(container, item) {
+  const row = document.createElement('div');
+  row.className = 'row screenshot-row';
+  row.innerHTML = `
+    <div class="row-body">
+      <div class="thumb screenshot-thumb"></div>
+      <div style="flex:1; min-width:0;">
+        <div class="title-line">
+          <span class="title">${item.title}</span>
+        </div>
+        <div class="meta"><span class="tag-screenshot">${item.tag}</span></div>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="icon-btn" aria-label="Share screenshot">${WHATSAPP_SVG}</button>
+      <span class="icon-btn chevron" aria-hidden="true">${CHEVRON_SVG}</span>
+    </div>
+  `;
+
+  const panel = document.createElement('div');
+  panel.className = 'panel';
+  panel.innerHTML = `<div class="panel-inner with-thumb">
+    <div class="panel-thumb" title="Tap to view full screen"></div>
+    <div>${item.description}</div>
+  </div>`;
+
+  const chevron = row.querySelector('.chevron');
+  const shareBtn = row.querySelector('.icon-btn[aria-label="Share screenshot"]');
+
+  shareBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    shareScreenshot(item.shareText);
+  });
+
+  row.addEventListener('click', () => {
+    const isOpen = chevron.classList.contains('open');
+    chevron.classList.toggle('open', !isOpen);
+    panel.style.maxHeight = isOpen ? '0px' : panel.querySelector('.panel-inner').scrollHeight + 'px';
+  });
+
+  container.appendChild(row);
+  container.appendChild(panel);
+
+  // wired after insertion so panel-thumb exists in the DOM
+  panel.querySelector('.panel-thumb').addEventListener('click', e => {
+    e.stopPropagation();
+    overlay.classList.add('visible');
+  });
+}
+
+document.getElementById('overlay-close').addEventListener('click', () => overlay.classList.remove('visible'));
+overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('visible'); });
+
+render();
+</script>
+</body>
+</html>

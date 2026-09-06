@@ -1,0 +1,32 @@
+/* Design tokens from link-box-spec.md §4.1.
+   Font families are supplied by next/font in layout.tsx, which sets
+   --font-lora and --font-inter on <html>. */
+
+:root {
+  --color-bg: #F1ECE2;
+  --color-text-primary: #2A241C;
+  --color-text-secondary: #6B5F4F;
+  --color-divider: #DDD3C2;
+  --color-accent: #9C5A22;
+  --color-accent-bg: #F8F0E4;
+  --color-thumb-placeholder: #E4DBC9;
+
+  --font-serif: var(--font-lora), Georgia, serif;
+  --font-sans: var(--font-inter), -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html {
+  background: var(--color-bg);
+  color-scheme: light;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  font-family: var(--font-sans);
+  color: var(--color-text-primary);
+  display: flex;
+  justify-content: center;
+}
