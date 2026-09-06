@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { getSupabase, isSupabaseConfigured } from '@/lib/supabase'
 import { parseUrl, domainOf } from '@/lib/url'
 
 /**
@@ -24,6 +24,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  if (!isSupabaseConfigured()) {
+    console.error('Supabase env vars missing; cannot store captures')
+    return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 })
+  }
+
   let body: unknown
   try {
     body = await request.json()
@@ -42,7 +47,7 @@ export async function POST(request: Request) {
 
   // Upsert on url: re-sharing a link updates the note rather than creating a
   // second row. Re-enrich, since a new note changes the title Gemini produces.
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from('links')
     .upsert(
       {

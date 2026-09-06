@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import type { Link } from '@/lib/types'
 import { displayTitle } from '@/lib/types'
 import { ChevronIcon, StarIcon, WhatsAppIcon } from './Icons'
@@ -14,15 +14,11 @@ function whatsAppHref(link: Link): string {
 
 export function LinkRow({ link }: { link: Link }) {
   const [open, setOpen] = useState(false)
-  const innerRef = useRef<HTMLDivElement>(null)
 
   const isWatch = link.tags.includes('watch')
   const primaryTag = link.tags[0] ?? null
   const hasPanel = Boolean(link.note || link.description)
   const awaitingTitle = link.enrichment === 'pending' && !link.title
-
-  // Measured rather than a guessed max-height, so long notes don't clip.
-  const panelHeight = open ? (innerRef.current?.scrollHeight ?? 0) : 0
 
   return (
     <>
@@ -93,22 +89,24 @@ export function LinkRow({ link }: { link: Link }) {
       </div>
 
       {hasPanel && (
-        <div className={styles.panel} style={{ maxHeight: panelHeight }}>
-          <div className={styles.panelInner} ref={innerRef}>
-            {link.description && <div>{link.description}</div>}
-            {link.note && (
-              <div className={link.description ? styles.note : undefined}>{link.note}</div>
-            )}
-            {link.trailer_url && (
-              <a
-                className={styles.trailerLink}
-                href={link.trailer_url}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Watch trailer
-              </a>
-            )}
+        <div className={`${styles.panel} ${open ? styles.panelOpen : ''}`}>
+          <div className={styles.panelClip}>
+            <div className={styles.panelInner}>
+              {link.description && <div>{link.description}</div>}
+              {link.note && (
+                <div className={link.description ? styles.note : undefined}>{link.note}</div>
+              )}
+              {link.trailer_url && (
+                <a
+                  className={styles.trailerLink}
+                  href={link.trailer_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Watch trailer
+                </a>
+              )}
+            </div>
           </div>
         </div>
       )}

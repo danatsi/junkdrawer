@@ -1,19 +1,18 @@
 import { LinkList } from '@/components/LinkList'
+import { getSupabase, isSupabaseConfigured } from '@/lib/supabase'
 import type { Link } from '@/lib/types'
 
 // Links arrive via the Shortcut at any time, so never serve a cached list.
 export const dynamic = 'force-dynamic'
 
 async function getLinks(): Promise<Link[]> {
-  // lib/supabase throws on import when the env vars are absent. Check first so
-  // a not-yet-configured deploy renders an empty drawer instead of a 500.
-  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  // A not-yet-configured deploy should render an empty drawer, not a 500.
+  if (!isSupabaseConfigured()) {
     console.warn('Supabase env vars missing — rendering an empty list')
     return []
   }
 
-  const { supabase } = await import('@/lib/supabase')
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from('links')
     .select('*')
     .eq('status', 'unread')

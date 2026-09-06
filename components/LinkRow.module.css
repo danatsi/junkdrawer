@@ -99,11 +99,23 @@
   transform: rotate(180deg);
 }
 
+/* Animating grid-template-rows 0fr -> 1fr eases to the content's natural
+   height without measuring it in JS, so no ref is read during render and long
+   notes can't clip the way a guessed max-height would. Safari 16+. */
 .panel {
-  max-height: 0;
-  overflow: hidden;
-  transition: max-height 0.3s ease;
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.3s ease;
   padding: 0 20px;
+}
+
+.panelOpen {
+  grid-template-rows: 1fr;
+}
+
+.panelClip {
+  overflow: hidden;
+  min-height: 0;
 }
 
 .panelInner {
