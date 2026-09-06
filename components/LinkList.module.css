@@ -47,3 +47,53 @@
   line-height: 1.6;
   border-top: 0.5px solid var(--color-divider);
 }
+
+.headerTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.headerTop .wordmark {
+  margin: 0;
+}
+
+.searchToggle {
+  background: none;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  display: flex;
+}
+
+.searchBar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.searchField {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--color-text-primary);
+  background: transparent;
+  border: none;
+  border-bottom: 0.5px solid var(--color-divider);
+  padding: 6px 0;
+  outline: none;
+}
+
+.searchField:focus {
+  border-bottom-color: var(--color-accent);
+}
+
+.searchField::placeholder {
+  color: var(--color-text-secondary);
+  opacity: 0.7;
+}

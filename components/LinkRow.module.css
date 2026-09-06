@@ -136,3 +136,43 @@
   text-decoration: none;
   font-size: 13px;
 }
+
+/* --- screenshot rows (spec §5.5) --- */
+
+/* No URL to open, so the whole body is the expand toggle. */
+.rowToggle {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  gap: 12px;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tagAccent {
+  color: var(--color-accent);
+}
+
+.panelWithThumb {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.panelThumb {
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  cursor: pointer;
+  object-fit: cover;
+  border: none;
+  padding: 0;
+  background: var(--color-thumb-placeholder);
+}

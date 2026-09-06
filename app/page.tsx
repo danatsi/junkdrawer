@@ -1,12 +1,17 @@
 import { LinkList } from '@/components/LinkList'
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase'
+import { MOCK_LINKS } from '@/lib/mock-data'
 import type { Link } from '@/lib/types'
 
 // Links arrive via the Shortcut at any time, so never serve a cached list.
 export const dynamic = 'force-dynamic'
 
 async function getLinks(): Promise<Link[]> {
-  // A not-yet-configured deploy should render an empty drawer, not a 500.
+  // Opt-in by env rather than "fall back when unconfigured", so a production
+  // deploy that's missing its Supabase vars shows an empty drawer instead of
+  // silently serving convincing fake links.
+  if (process.env.MOCK_DATA === '1') return MOCK_LINKS
+
   if (!isSupabaseConfigured()) {
     console.warn('Supabase env vars missing — rendering an empty list')
     return []

@@ -10,6 +10,7 @@ export const metadata: Metadata = {
   description: "Links you don't want to lose but don't want to deal with right now.",
   manifest: '/manifest.json',
   appleWebApp: { capable: true, title: 'Junk Drawer', statusBarStyle: 'default' },
+  icons: { apple: '/apple-touch-icon.png', icon: '/icon-192.png' },
 }
 
 export const viewport: Viewport = {
