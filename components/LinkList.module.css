@@ -1,0 +1,49 @@
+.screen {
+  width: 100%;
+  max-width: 420px;
+  min-height: 100vh;
+}
+
+.header {
+  padding: 20px 20px 14px;
+}
+
+.wordmark {
+  font-family: var(--font-serif);
+  font-size: 20px;
+  font-weight: 500;
+  margin: 0 0 16px;
+}
+
+.chips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.chip {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  white-space: nowrap;
+  cursor: pointer;
+  border: 0.5px solid var(--color-divider);
+  background: transparent;
+  color: var(--color-text-secondary);
+}
+
+.chipActive {
+  background: var(--color-accent);
+  color: var(--color-accent-bg);
+  border-color: transparent;
+}
+
+.empty {
+  padding: 40px 20px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+  border-top: 0.5px solid var(--color-divider);
+}

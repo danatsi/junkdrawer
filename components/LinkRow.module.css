@@ -1,0 +1,126 @@
+.row {
+  border-top: 0.5px solid var(--color-divider);
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px 20px;
+}
+
+.rowLink {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  gap: 12px;
+  text-decoration: none;
+  color: inherit;
+}
+
+.thumb {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  background: var(--color-thumb-placeholder);
+  flex-shrink: 0;
+  object-fit: cover;
+}
+
+.content {
+  flex: 1;
+  min-width: 0;
+}
+
+.titleLine {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.title {
+  font-family: var(--font-serif);
+  font-size: 15px;
+  color: var(--color-text-primary);
+}
+
+.pending {
+  color: var(--color-text-secondary);
+}
+
+.score {
+  background: var(--color-accent-bg);
+  color: var(--color-accent);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 7px;
+  border-radius: 5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.meta {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  margin-top: 2px;
+}
+
+.tagWatch {
+  color: var(--color-accent);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-top: 2px;
+}
+
+.iconBtn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  color: var(--color-text-secondary);
+}
+
+/* Kept in the layout but invisible on rows with nothing to expand, so the
+   WhatsApp icon never shifts position between rows. */
+.chevronHidden {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.chevron {
+  transition: transform 0.25s ease;
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
+}
+
+.panel {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+  padding: 0 20px;
+}
+
+.panelInner {
+  padding: 10px 0 14px 52px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+}
+
+.note {
+  margin-top: 6px;
+}
+
+.trailerLink {
+  display: inline-block;
+  margin-top: 8px;
+  color: var(--color-accent);
+  text-decoration: none;
+  font-size: 13px;
+}
