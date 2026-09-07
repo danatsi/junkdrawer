@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "relock": "node scripts/relock.mjs",
     "dev:mock": "MOCK_DATA=1 next dev"
   },
   "dependencies": {
