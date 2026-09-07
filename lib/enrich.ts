@@ -29,6 +29,7 @@ export async function enrich(link: EnrichTarget): Promise<void> {
   }
 
   const update: Partial<Link> = {}
+  const startedAt = Date.now()
 
   try {
     // 1. Open Graph. Returns {} rather than throwing on any failure.
@@ -64,7 +65,9 @@ export async function enrich(link: EnrichTarget): Promise<void> {
     await save(link.id, { ...update, enrichment: 'ok', enrich_error: null })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    console.error('enrich: failed for', link.id, message)
+    // The elapsed time is the fastest way to tell a timeout apart from an
+    // upstream rejection when reading logs after the fact.
+    console.error(`enrich: failed for ${link.id} after ${Date.now() - startedAt}ms:`, message)
     // Keep whatever did succeed, and record why the rest didn't. The row stays
     // usable; PLAN §4 explicitly wants the domain showing as a title over an
     // empty row.

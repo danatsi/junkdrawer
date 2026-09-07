@@ -19,10 +19,20 @@ export interface GeminiResult {
 }
 
 /** Overridable without a code change, since Gemini's model names move faster
- *  than this app will. */
-const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash'
+ *  than this app will — gemini-2.5-flash was already closed to new API keys by
+ *  the time this shipped, with the API itself naming 3.6-flash as the successor. */
+const MODEL = process.env.GEMINI_MODEL || 'gemini-3.6-flash'
 
-const TIMEOUT_MS = 15_000
+/** The SDK still defaults to v1beta, where the current flash models 404 (with
+ *  an empty body, so the failure is silent unless you check the status). Every
+ *  model from 3.x on is only served from v1. */
+const API_VERSION = 'v1'
+
+/** Generous because the free tier queues concurrent calls rather than
+ *  rejecting them: a lone request answers in ~3s, but three at once left two
+ *  still waiting at 15s. The route's budget is 60s and the other steps cap at
+ *  ~20s combined, so this is the slack that's actually available. */
+const TIMEOUT_MS = 30_000
 
 const RESPONSE_SCHEMA = {
   type: Type.OBJECT,
@@ -61,7 +71,7 @@ function getClient(): GoogleGenAI {
   if (client) return client
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) throw new Error('Missing required env var: GEMINI_API_KEY')
-  client = new GoogleGenAI({ apiKey })
+  client = new GoogleGenAI({ apiKey, httpOptions: { apiVersion: API_VERSION } })
   return client
 }
 
