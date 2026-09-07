@@ -3,7 +3,7 @@ import { getSupabase, isSupabaseConfigured } from './supabase'
 import { fetchOpenGraph } from './og'
 import { ensureFavicon } from './icons'
 import { generateFromImage, generateMetadata, isGeminiConfigured } from './gemini'
-import { fetchMovieData } from './movies'
+import { extractImdbId, fetchMovieData, fetchMovieDataByImdbId, type MovieData } from './movies'
 import type { Link } from './types'
 
 /**
@@ -21,6 +21,9 @@ export interface EnrichTarget {
   url: string
   domain: string | null
   note: string | null
+  /** Set when the capture already stored a photo taken from the rendered page.
+   *  Nothing scraped can beat that, so enrichment leaves the image alone. */
+  keepImage?: boolean
 }
 
 export async function enrich(link: EnrichTarget): Promise<void> {
@@ -35,9 +38,25 @@ export async function enrich(link: EnrichTarget): Promise<void> {
   try {
     // 1. Open Graph. Returns {} rather than throwing on any failure.
     const og = await fetchOpenGraph(link.url)
+
+    // 1b. An IMDb title URL is the case where a failed scrape is not merely
+    //     thin data. IMDb blocks the fetch above (it answers 202 with a bot
+    //     page), leaving step 2 nothing but `/title/tt1442437/` — and an
+    //     opaque id is the one input it cannot infer a title from without
+    //     inventing one, which it will, confidently and wrongly. Resolving
+    //     the id here means the title is looked up rather than guessed, and
+    //     the real title and synopsis stand in for the missing scrape.
+    const imdbId = extractImdbId(link.url)
+    let movie: MovieData | undefined
+    if (imdbId) {
+      movie = await fetchMovieDataByImdbId(imdbId)
+      if (movie.title) og.title = movie.title
+      if (movie.description) og.description = movie.description
+    }
+
     if (og.title) update.title = og.title
     if (og.description) update.description = og.description
-    if (og.image) {
+    if (og.image && !link.keepImage) {
       update.image_url = og.image
       update.image_kind = 'photo'
     }
@@ -57,19 +76,26 @@ export async function enrich(link: EnrichTarget): Promise<void> {
     if (generated.summary) update.description = generated.summary
     update.tags = generated.tags
 
-    // 3. The watch sub-pipeline, only when Gemini said so.
-    if (generated.tags.includes('watch')) {
-      const movie = await fetchMovieData(generated.clean_title || og.title || '')
+    // 3. The watch sub-pipeline. An IMDb link resolved itself by id in 1b;
+    //    everything else needs Gemini to have recognised a film or show, and
+    //    gets looked up by name.
+    if (!movie && generated.tags.includes('watch')) {
+      movie = await fetchMovieData(generated.clean_title || og.title || '')
+    }
+    if (movie) {
       // TMDb's overview is a real synopsis; prefer it over the 20-word summary.
       if (movie.description) update.description = movie.description
       if (movie.imdb_rating) update.imdb_rating = movie.imdb_rating
       if (movie.trailer_url) update.trailer_url = movie.trailer_url
+      // Only the by-id path sets a title, and there it's the canonical one —
+      // this row *is* that film or show, so it outranks a rephrasing of it.
+      if (movie.title) update.title = movie.title
     }
 
     // No usable photo — most large retailers block scraping entirely, so this
     // is the common case rather than the exception. The brand's own icon is
     // still recognisable at 40px and beats an empty square.
-    if (!update.image_url) {
+    if (!update.image_url && !link.keepImage) {
       const favicon = await ensureFavicon(link.domain, og.iconHref)
       if (favicon) {
         update.image_url = favicon

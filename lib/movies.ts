@@ -12,6 +12,9 @@ import 'server-only'
  * throws, and a partial result is a valid result.
  */
 export interface MovieData {
+  /** Only set by the by-id path, where the title is authoritative rather than
+   *  something we searched for. */
+  title?: string
   description?: string
   imdb_rating?: string
   trailer_url?: string
@@ -46,8 +49,82 @@ export async function fetchMovieData(title: string): Promise<MovieData> {
   return {
     description: hit.overview?.trim() || undefined,
     trailer_url: pickTrailer(videos?.results),
-    imdb_rating: imdbId ? await fetchImdbRating(imdbId) : undefined,
+    imdb_rating: imdbId ? (await fetchOmdb(imdbId))?.rating : undefined,
   }
+}
+
+/**
+ * An IMDb title URL identifies the thing exactly — but only as an opaque id.
+ * `tt1442437` contains no words, so nothing downstream can infer a title from
+ * it; it has to be resolved. IMDb also blocks scraping, which means this is
+ * the only place the real title can come from.
+ */
+export function extractImdbId(rawUrl: string): string | undefined {
+  let url: URL
+  try {
+    url = new URL(rawUrl)
+  } catch {
+    return undefined
+  }
+  if (!/(^|\.)imdb\.com$/i.test(url.hostname)) return undefined
+  const match = /^\/title\/(tt\d+)/i.exec(url.pathname)
+  return match?.[1].toLowerCase()
+}
+
+/**
+ * The same data as fetchMovieData, keyed off an IMDb id instead of a title —
+ * so it can't land on the wrong film, which searching by name can. Both
+ * halves stay optional: OMDb alone still yields a title and a rating, TMDb
+ * alone still yields a synopsis and a trailer.
+ */
+export async function fetchMovieDataByImdbId(imdbId: string): Promise<MovieData> {
+  const tmdbKey = process.env.TMDB_API_KEY
+  const [omdb, hit] = await Promise.all([
+    fetchOmdb(imdbId),
+    tmdbKey ? findByImdbId(imdbId, tmdbKey) : undefined,
+  ])
+
+  const videos =
+    hit && tmdbKey
+      ? await getJson<{ results?: TmdbVideo[] }>(
+          `${TMDB}/${hit.media_type}/${hit.id}/videos?api_key=${tmdbKey}`,
+        )
+      : undefined
+
+  return {
+    // OMDb's is the title IMDb itself shows, which is what the saved link said.
+    title: omdb?.title ?? hit?.title,
+    description: hit?.overview?.trim() || omdb?.plot,
+    imdb_rating: omdb?.rating,
+    trailer_url: pickTrailer(videos?.results),
+  }
+}
+
+/** /find returns movies and shows in separate buckets, neither of which
+ *  carries media_type — the bucket it arrived in is the media type. */
+async function findByImdbId(
+  imdbId: string,
+  key: string,
+): Promise<{ id: number; media_type: 'movie' | 'tv'; title?: string; overview?: string } | undefined> {
+  const data = await getJson<{ movie_results?: TmdbFound[]; tv_results?: TmdbFound[] }>(
+    `${TMDB}/find/${encodeURIComponent(imdbId)}?api_key=${key}&external_source=imdb_id`,
+  )
+
+  const movie = data?.movie_results?.[0]
+  if (movie) return { id: movie.id, media_type: 'movie', title: movie.title, overview: movie.overview }
+
+  const tv = data?.tv_results?.[0]
+  if (tv) return { id: tv.id, media_type: 'tv', title: tv.name, overview: tv.overview }
+
+  return undefined
+}
+
+interface TmdbFound {
+  id: number
+  /** Films carry `title`, shows carry `name`. */
+  title?: string
+  name?: string
+  overview?: string
 }
 
 interface TmdbHit {
@@ -86,16 +163,28 @@ function pickTrailer(videos: TmdbVideo[] | undefined): string | undefined {
   return chosen?.key ? `https://www.youtube.com/watch?v=${chosen.key}` : undefined
 }
 
-async function fetchImdbRating(imdbId: string): Promise<string | undefined> {
+interface OmdbData {
+  title?: string
+  plot?: string
+  rating?: string
+}
+
+async function fetchOmdb(imdbId: string): Promise<OmdbData | undefined> {
   const key = process.env.OMDB_API_KEY
   if (!key) return undefined
 
-  const data = await getJson<{ imdbRating?: string }>(
+  const data = await getJson<{ Title?: string; Plot?: string; imdbRating?: string }>(
     `https://www.omdbapi.com/?apikey=${key}&i=${encodeURIComponent(imdbId)}`,
   )
-  // OMDb returns the string "N/A" rather than omitting the field.
-  const rating = data?.imdbRating?.trim()
-  return rating && rating !== 'N/A' ? rating : undefined
+  if (!data) return undefined
+
+  return { title: usable(data.Title), plot: usable(data.Plot), rating: usable(data.imdbRating) }
+}
+
+/** OMDb returns the string "N/A" rather than omitting a field. */
+function usable(value: string | undefined): string | undefined {
+  const trimmed = value?.trim()
+  return trimmed && trimmed !== 'N/A' ? trimmed : undefined
 }
 
 /** Returns undefined on any failure. Callers treat every field as optional,

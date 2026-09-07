@@ -3,7 +3,7 @@ import { after } from 'next/server'
 import { getSupabase, isSupabaseConfigured } from './supabase'
 import { enrich, enrichScreenshot } from './enrich'
 import { parseUrl, domainOf } from './url'
-import { uploadScreenshot } from './storage'
+import { uploadImage } from './storage'
 
 /**
  * Saving a link, shared by the two things that can do it: the iOS Shortcut's
@@ -11,11 +11,28 @@ import { uploadScreenshot } from './storage'
  * identical behaviour — same validation, same upsert, same deferred
  * enrichment — so neither should own the logic.
  */
+/** Compressed on-device first, so anything larger is either a bug or not a
+ *  screenshot. Also the bucket's own limit, enforced twice on purpose. */
+const MAX_SCREENSHOT_BYTES = 5 * 1024 * 1024
+
+const ALLOWED_IMAGE_TYPES = new Set(['image/webp', 'image/jpeg', 'image/png'])
+
 export type CaptureResult =
   | { ok: true; id: string }
   | { ok: false; status: number; error: string }
 
-export async function saveLink(rawUrl: unknown, rawNote: unknown): Promise<CaptureResult> {
+/**
+ * @param image Optional thumbnail captured on-device by the Shortcut. Large
+ *   retailers block server-side scraping outright — Zara serves an Akamai
+ *   interstitial, Amazon/Etsy/H&M/Argos return 403 — so the only reliable way
+ *   to get a photo of the actual item is to take it from the page already
+ *   rendered in your own browser, where there's nothing to block.
+ */
+export async function saveLink(
+  rawUrl: unknown,
+  rawNote: unknown,
+  image?: unknown,
+): Promise<CaptureResult> {
   const url = parseUrl(rawUrl)
   if (!url) {
     return { ok: false, status: 400, error: 'Missing or invalid http(s) url' }
@@ -30,12 +47,33 @@ export async function saveLink(rawUrl: unknown, rawNote: unknown): Promise<Captu
   const href = url.toString()
   const domain = domainOf(url)
 
+  // A supplied image wins outright over anything enrichment could scrape, so
+  // it's stored up front and enrichment leaves it alone.
+  let imageRef: string | null = null
+  if (isUsableImage(image)) {
+    try {
+      const extension = image.type === 'image/png' ? 'png' : image.type === 'image/webp' ? 'webp' : 'jpg'
+      imageRef = await uploadImage('items', `${crypto.randomUUID()}.${extension}`, image)
+    } catch (uploadError) {
+      // Losing the thumbnail is not worth losing the link over.
+      console.error('capture: item image upload failed', uploadError)
+    }
+  }
+
   // Upsert on url: re-sharing a link updates the note rather than creating a
   // second row. Re-enrich, since a new note changes the title Gemini produces.
   const { data, error } = await getSupabase()
     .from('links')
     .upsert(
-      { url: href, note, domain, status: 'unread', enrichment: 'pending', enrich_error: null },
+      {
+        url: href,
+        note,
+        domain,
+        status: 'unread',
+        enrichment: 'pending',
+        enrich_error: null,
+        ...(imageRef ? { image_url: imageRef, image_kind: 'photo' } : {}),
+      },
       { onConflict: 'url' },
     )
     .select('id')
@@ -51,17 +89,20 @@ export async function saveLink(rawUrl: unknown, rawNote: unknown): Promise<Captu
   // waitUntil, so this survives the function returning on Vercel.
   const id = data.id as string
   after(async () => {
-    await enrich({ id, url: href, note, domain })
+    await enrich({ id, url: href, note, domain, keepImage: Boolean(imageRef) })
   })
 
   return { ok: true, id }
 }
 
-/** Compressed in the browser first, so anything larger is either a bug or not
- *  a screenshot. Also the bucket's own limit, enforced twice on purpose. */
-const MAX_SCREENSHOT_BYTES = 5 * 1024 * 1024
-
-const ALLOWED_IMAGE_TYPES = new Set(['image/webp', 'image/jpeg', 'image/png'])
+function isUsableImage(value: unknown): value is File {
+  return (
+    value instanceof File &&
+    value.size > 0 &&
+    value.size <= MAX_SCREENSHOT_BYTES &&
+    ALLOWED_IMAGE_TYPES.has(value.type)
+  )
+}
 
 /**
  * Saving a screenshot (spec §5.4). Same shape as saveLink: store, return, and
@@ -91,8 +132,9 @@ export async function saveScreenshot(file: unknown, rawNote: unknown): Promise<C
   const extension = file.type === 'image/png' ? 'png' : file.type === 'image/jpeg' ? 'jpg' : 'webp'
   const objectPath = `${id}.${extension}`
 
+  let imageRef: string
   try {
-    await uploadScreenshot(file, objectPath)
+    imageRef = await uploadImage('screenshots', objectPath, file)
   } catch (error) {
     console.error('capture: screenshot upload failed', error)
     return { ok: false, status: 502, error: 'Could not store the image' }
@@ -104,9 +146,9 @@ export async function saveScreenshot(file: unknown, rawNote: unknown): Promise<C
       url: `screenshot:${id}`,
       note,
       domain: null,
-      // The object path, not a URL: the bucket is private, so the list signs
-      // it at render time (see lib/storage.ts).
-      image_url: objectPath,
+      // A storage reference, not a URL: the bucket is private, so the list
+      // signs it at render time (see lib/storage.ts).
+      image_url: imageRef,
       image_kind: 'photo',
       type: 'screenshot',
       status: 'unread',

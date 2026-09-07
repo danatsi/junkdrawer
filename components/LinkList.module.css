@@ -103,3 +103,49 @@
   color: var(--color-text-secondary);
   opacity: 0.7;
 }
+
+/* Section headers sit in the rows' own 20px gutter and carry the same divider,
+   so grouping reads as breaks in one list rather than a stack of cards. */
+.sectionHeader {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 20px 6px;
+  border: none;
+  border-top: 0.5px solid var(--color-divider);
+  background: transparent;
+  font-family: var(--font-sans);
+  text-align: left;
+  cursor: pointer;
+  /* Secondary, not accent: the accent is reserved for status (spec §4.1), and
+     a header is not a status. */
+  color: var(--color-text-secondary);
+}
+
+/* The pinned "adding details" section has nothing to toggle. */
+.sectionHeaderStatic {
+  cursor: default;
+}
+
+.sectionName {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sectionCount {
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.sectionChevron {
+  display: flex;
+  transition: transform 0.25s ease;
+}
+
+/* Down when open, right when closed — the row chevrons rotate the other way
+   (0 -> 180) because they start closed. */
+.sectionChevronClosed {
+  transform: rotate(-90deg);
+}

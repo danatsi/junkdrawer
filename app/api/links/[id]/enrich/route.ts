@@ -1,6 +1,7 @@
 import { NextResponse, after } from 'next/server'
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase'
-import { enrich } from '@/lib/enrich'
+import { enrich, enrichScreenshot } from '@/lib/enrich'
+import { downloadImage, parseStorageRef } from '@/lib/storage'
 
 /** Same budget as capture — it runs the same three steps. */
 export const maxDuration = 60
@@ -23,7 +24,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   // also means a bad id 404s instead of silently queueing work for nothing.
   const { data, error } = await getSupabase()
     .from('links')
-    .select('id, url, note, domain')
+    .select('id, url, note, domain, type, image_url')
     .eq('id', id)
     .maybeSingle()
 
@@ -42,11 +43,30 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     .update({ enrichment: 'pending', enrich_error: null })
     .eq('id', id)
 
+  const rowId = data.id as string
+  const note = (data.note as string | null) ?? null
+
   after(async () => {
+    // A screenshot has no page to scrape and its `url` is a synthetic
+    // identifier, so re-running the link pipeline over it produces a title
+    // from the note alone — which is how a Blade Runner 2049 screenshot came
+    // back as "Television show recommendation". Fetch the image back out of
+    // storage and re-run the vision path instead.
+    if (data.type === 'screenshot') {
+      const ref = parseStorageRef((data.image_url as string | null) ?? null)
+      if (!ref) {
+        console.error('enrich: screenshot row has no usable image ref', rowId)
+        return
+      }
+      const { image, mimeType } = await downloadImage(ref.bucket, ref.path)
+      await enrichScreenshot({ id: rowId, image, mimeType, note })
+      return
+    }
+
     await enrich({
-      id: data.id as string,
+      id: rowId,
       url: data.url as string,
-      note: (data.note as string | null) ?? null,
+      note,
       domain: (data.domain as string | null) ?? null,
     })
   })

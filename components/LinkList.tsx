@@ -9,7 +9,7 @@ import { LinkRow } from './LinkRow'
 import { ScreenshotRow } from './ScreenshotRow'
 import { SwipeableRow } from './SwipeableRow'
 import { Toast } from './Toast'
-import { SearchIcon, CloseIcon, PlusIcon } from './Icons'
+import { SearchIcon, CloseIcon, PlusIcon, ChevronIcon } from './Icons'
 import styles from './LinkList.module.css'
 
 const ALL = 'all'
@@ -21,6 +21,65 @@ const POLL_MS = 3_000
  *  stays `pending` means the function died mid-flight and no amount of polling
  *  will resolve it — without a ceiling that row would poll forever. */
 const POLL_BUDGET_MS = 120_000
+
+/**
+ * The All tab is grouped rather than endless (spec §4.1 gave it one flat
+ * list). A filtered tab is already a single category, so it stays flat.
+ *
+ * Sections follow the chip bar's order, because that's the order the
+ * categories are already learned in.
+ */
+const SECTION_ORDER = [...CORE_TAGS] as const
+
+/** Keys are ids and CSS selectors as well as labels, hence the split. */
+const PENDING_SECTION = { key: 'pending', label: 'adding details' } as const
+const OTHER_SECTION = { key: 'other', label: 'everything else' } as const
+
+interface Section {
+  key: string
+  label: string
+  links: Link[]
+  /** Rows still enriching have no tags yet, so they would all land in
+   *  "everything else" — the bottom of the list, which is the worst place for
+   *  the link you just shared. They get their own section on top, and it
+   *  doesn't collapse: it empties itself as enrichment finishes. */
+  pinned?: boolean
+}
+
+/** Exported for its own sake: the bucketing rules are worth checking without
+ *  rendering anything. */
+export function groupIntoSections(links: Link[]): Section[] {
+  const buckets = new Map<string, Link[]>()
+  const push = (key: string, link: Link) => {
+    const bucket = buckets.get(key)
+    if (bucket) bucket.push(link)
+    else buckets.set(key, [link])
+  }
+
+  for (const link of links) {
+    if (link.enrichment === 'pending') {
+      push(PENDING_SECTION.key, link)
+      continue
+    }
+    // A row can carry several core tags. It belongs to the first one in chip
+    // order, so every row appears exactly once, the counts add up to the
+    // total, and archiving can't leave a duplicate behind elsewhere.
+    const category = SECTION_ORDER.find((tag) => link.tags.includes(tag))
+    push(category ?? OTHER_SECTION.key, link)
+  }
+
+  const sections: Section[] = []
+  const add = (key: string, label: string, pinned?: boolean) => {
+    const bucket = buckets.get(key)
+    // An empty section is noise: there's nothing to expand.
+    if (bucket?.length) sections.push({ key, label, links: bucket, pinned })
+  }
+
+  add(PENDING_SECTION.key, PENDING_SECTION.label, true)
+  for (const tag of SECTION_ORDER) add(tag, tag)
+  add(OTHER_SECTION.key, OTHER_SECTION.label)
+  return sections
+}
 
 /** Search matches title, domain, note, a screenshot's OCR'd text, and every
  *  tag — including the freeform ones that never get a chip, which is the main
@@ -50,6 +109,9 @@ export function LinkList({ links }: { links: Link[] }) {
   // position without having to remember an index.
   const [archivedIds, setArchivedIds] = useState<ReadonlySet<string>>(new Set())
   const [archived, setArchived] = useState<Link | null>(null)
+  // Collapsed rather than expanded ids: the default is open, so an empty set
+  // is the default state and a new category doesn't arrive collapsed.
+  const [collapsedSections, setCollapsedSections] = useState<ReadonlySet<string>>(new Set())
   const searchRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
 
@@ -115,6 +177,15 @@ export function LinkList({ links }: { links: Link[] }) {
     void setStatus(archived.id, 'unread')
   }, [archived, setStatus])
 
+  const toggleSection = useCallback((key: string) => {
+    setCollapsedSections((current) => {
+      const next = new Set(current)
+      // delete() reports whether it removed anything, which is the toggle.
+      if (!next.delete(key)) next.add(key)
+      return next
+    })
+  }, [])
+
   function closeSearch() {
     setSearchOpen(false)
     setQuery('')
@@ -125,6 +196,14 @@ export function LinkList({ links }: { links: Link[] }) {
     .filter((l) => !archivedIds.has(l.id))
     .filter((l) => activeTag === ALL || l.tags.includes(activeTag))
     .filter((l) => !trimmedQuery || matchesQuery(l, trimmedQuery))
+
+  const sections = activeTag === ALL ? groupIntoSections(visible) : null
+
+  const renderRow = (link: Link) => (
+    <SwipeableRow key={link.id} onArchive={() => archive(link)}>
+      {link.type === 'screenshot' ? <ScreenshotRow link={link} /> : <LinkRow link={link} />}
+    </SwipeableRow>
+  )
 
   return (
     <main className={styles.screen}>
@@ -188,16 +267,45 @@ export function LinkList({ links }: { links: Link[] }) {
 
       {visible.length === 0 ? (
         <p className={styles.empty}>{emptyMessage(links.length, trimmedQuery, activeTag)}</p>
+      ) : sections ? (
+        sections.map((section) => {
+          // A collapsed section would hide search hits, so a query overrides
+          // the collapse state rather than the user having to reopen sections
+          // to find out where their match is.
+          const collapsed =
+            !section.pinned && !trimmedQuery && collapsedSections.has(section.key)
+          const bodyId = `section-${section.key}`
+
+          return (
+            <section key={section.key}>
+              {section.pinned ? (
+                <div className={`${styles.sectionHeader} ${styles.sectionHeaderStatic}`}>
+                  {sectionLabel(section)}
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className={styles.sectionHeader}
+                  aria-expanded={!collapsed}
+                  aria-controls={bodyId}
+                  onClick={() => toggleSection(section.key)}
+                >
+                  <span
+                    className={`${styles.sectionChevron} ${
+                      collapsed ? styles.sectionChevronClosed : ''
+                    }`}
+                  >
+                    <ChevronIcon />
+                  </span>
+                  {sectionLabel(section)}
+                </button>
+              )}
+              {!collapsed && <div id={bodyId}>{section.links.map(renderRow)}</div>}
+            </section>
+          )
+        })
       ) : (
-        visible.map((link) => (
-          <SwipeableRow key={link.id} onArchive={() => archive(link)}>
-            {link.type === 'screenshot' ? (
-              <ScreenshotRow link={link} />
-            ) : (
-              <LinkRow link={link} />
-            )}
-          </SwipeableRow>
-        ))
+        visible.map(renderRow)
       )}
 
       <AnimatePresence>
@@ -212,6 +320,17 @@ export function LinkList({ links }: { links: Link[] }) {
         )}
       </AnimatePresence>
     </main>
+  )
+}
+
+/** The count is part of the label rather than pushed to the right edge: it
+ *  reads as one phrase, and tells you what a collapsed section is holding. */
+function sectionLabel(section: Section) {
+  return (
+    <>
+      <span className={styles.sectionName}>{section.label}</span>
+      <span className={styles.sectionCount}>{`· ${section.links.length}`}</span>
+    </>
   )
 }
 

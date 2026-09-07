@@ -199,27 +199,36 @@ function buildImagePrompt(note: string | null): string {
   return [
     'This is a screenshot someone saved to look at later.',
     'Read it and produce a clean title, a short summary, tags, and its text.',
-    note
-      ? `\nthe person's own note: "${note}"\n` +
-        'The note is the PRIMARY signal for what matters about this image.'
-      : '',
     '',
-    'Rules:',
-    `- tags: choose from ${CORE_TAGS.join(', ')}. Usually exactly one. Omit rather than guess.`,
-    // The whole point of the watch tag here: a screenshot of a film poster or
-    // a streaming app should reach the same TMDb lookup a pasted link would.
-    '- If the image shows a film or TV show — a poster, a streaming app, a',
-    '  review, a cast list — tag it "watch" and make clean_title the exact',
-    '  title of that film or show, nothing else. It gets looked up by name.',
-    '- freeform_tag: at most one specific lowercase word for what this is.',
-    '- clean_title: under 8 words, sentence case.',
-    '- summary: under 20 words describing what the screenshot shows.',
-    '- extracted_text: every legible piece of text, verbatim, in reading order.',
-    '- Never refuse. If the image is unclear, describe what you can see.',
+    'Rules, in priority order:',
+    // This rule is deliberately first and absolute. The note is usually vague
+    // about *what* the thing is ("saw this on the tv last night") while being
+    // useful about why it was saved, and letting it drive the title produced
+    // "Television show recommendation" for a Blade Runner 2049 screenshot —
+    // which then found nothing in TMDb. The image knows the title; the note
+    // knows the reason.
+    '1. If the image shows a film or TV show — a poster, a streaming app, a',
+    '   review, a cast list — tag it "watch" and set clean_title to the exact',
+    '   title of that film or show and NOTHING else. No description, no',
+    '   commentary, no words from the note. It is looked up by that title, so',
+    '   "Blade Runner 2049" works and "Television show recommendation" does not.',
+    '2. Otherwise, clean_title describes what the screenshot shows, under 8',
+    '   words, sentence case.',
+    `3. tags: choose from ${CORE_TAGS.join(', ')}. Usually exactly one. Omit rather than guess.`,
+    '4. freeform_tag: at most one specific lowercase word for what this is.',
+    '5. summary: under 20 words describing what the screenshot shows.',
+    '6. extracted_text: every legible piece of text, verbatim, in reading order.',
+    '7. Never refuse. If the image is unclear, describe what you can see.',
+    note
+      ? `\nThe person's own note: "${note}"\n` +
+        'Use it for the summary and the tags — it says why this was worth saving. ' +
+        'It must not change clean_title when rule 1 applies.'
+      : '',
   ]
     .filter(Boolean)
     .join('\n')
 }
+
 
 function str(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''

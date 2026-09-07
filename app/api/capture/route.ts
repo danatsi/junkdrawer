@@ -9,7 +9,15 @@ export const maxDuration = 60
 /**
  * POST /api/capture — the iOS Shortcut's endpoint (spec §2.2).
  *
- * Body: { url: string, note?: string }
+ * Accepts either shape:
+ *   application/json      { url, note? }
+ *   multipart/form-data   url, note?, image?
+ *
+ * The multipart form exists so the Shortcut can send a thumbnail it grabbed
+ * from the page already rendered on your phone. That's the only reliable way
+ * to get a photo of the actual item: the big retailers block server-side
+ * scraping, but nothing blocks your own browser.
+ *
  * Auth: Authorization: Bearer <CAPTURE_TOKEN>
  *
  * Returns as soon as the row is stored. Enrichment runs afterwards and the
@@ -28,15 +36,33 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  let body: unknown
-  try {
-    body = await request.json()
-  } catch {
-    return NextResponse.json({ error: 'Body must be JSON' }, { status: 400 })
+  const contentType = request.headers.get('content-type') ?? ''
+
+  let url: unknown
+  let note: unknown
+  let image: unknown
+
+  if (contentType.includes('multipart/form-data')) {
+    let form: FormData
+    try {
+      form = await request.formData()
+    } catch {
+      return NextResponse.json({ error: 'Malformed multipart body' }, { status: 400 })
+    }
+    url = form.get('url')
+    note = form.get('note')
+    image = form.get('image')
+  } else {
+    let body: unknown
+    try {
+      body = await request.json()
+    } catch {
+      return NextResponse.json({ error: 'Body must be JSON or multipart/form-data' }, { status: 400 })
+    }
+    ;({ url, note } = (body ?? {}) as { url?: unknown; note?: unknown })
   }
 
-  const { url, note } = (body ?? {}) as { url?: unknown; note?: unknown }
-  const result = await saveLink(url, note)
+  const result = await saveLink(url, note, image)
 
   return result.ok
     ? NextResponse.json({ id: result.id, saved: true }, { status: 201 })
