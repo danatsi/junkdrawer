@@ -24,11 +24,18 @@ export interface Link {
   type: LinkType
   enrichment: EnrichmentState
   enrich_error: string | null
+  /** OCR'd text from a screenshot (spec §5.3). Null for link rows. */
+  extracted_text: string | null
   created_at: string
 }
 
 /** What a row shows before enrichment finishes: the domain stands in for the
- *  title, since there's nothing better yet. */
+ *  title, since there's nothing better yet. A screenshot has no domain and its
+ *  `url` is only an internal identifier, so it falls back to a plain word
+ *  rather than leaking that identifier into the UI. */
 export function displayTitle(link: Link): string {
-  return link.title?.trim() || link.domain || link.url
+  const title = link.title?.trim()
+  if (title) return title
+  if (link.type === 'screenshot') return 'Screenshot'
+  return link.domain || link.url
 }
