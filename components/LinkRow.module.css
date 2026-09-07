@@ -64,6 +64,34 @@
   animation: breathe 1.6s ease-in-out infinite;
 }
 
+/* Failed is a resting state, not an alarm — the row still works, it's just
+   thin. Same weight as a tag, no red. */
+.failedNote {
+  font-style: italic;
+}
+
+.failedPanel {
+  margin-bottom: 10px;
+}
+
+.retry {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  margin-top: 6px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--color-accent);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.retry:disabled {
+  color: var(--color-text-secondary);
+  cursor: default;
+  text-decoration: none;
+}
+
 @keyframes shimmer {
   from { background-position: 150% 0; }
   to { background-position: -150% 0; }

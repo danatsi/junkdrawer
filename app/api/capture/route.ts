@@ -1,6 +1,12 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase'
 import { parseUrl, domainOf } from '@/lib/url'
+import { enrich } from '@/lib/enrich'
+
+/** The scrape, the Gemini call and the watch chain run inside `after`, which
+ *  shares the route's budget — so the ceiling has to cover all three, not just
+ *  the insert. */
+export const maxDuration = 60
 
 /**
  * POST /api/capture — the iOS Shortcut's endpoint (spec §2.2).
@@ -68,7 +74,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Could not save link' }, { status: 500 })
   }
 
-  return NextResponse.json({ id: data.id, saved: true }, { status: 201 })
+  // PLAN §4: the Shortcut's request ends here. `after` is Next 16's supported
+  // way to keep working once the response is out — it wraps the platform's
+  // waitUntil, so this survives the function returning on Vercel.
+  const id = data.id as string
+  after(async () => {
+    await enrich({ id, url: url.toString(), note, domain: domainOf(url) })
+  })
+
+  return NextResponse.json({ id, saved: true }, { status: 201 })
 }
 
 /** Constant-time compare so the token can't be recovered by timing the

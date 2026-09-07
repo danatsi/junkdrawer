@@ -20,10 +20,3 @@ export function parseUrl(raw: unknown): URL | null {
 export function domainOf(url: URL): string {
   return url.hostname.replace(/^www\./, '')
 }
-
-/** Instagram blocks server-side OG scraping, so these links lean on the
- *  user's note instead (spec §2.3). */
-export function isInstagram(url: URL): boolean {
-  const host = url.hostname.replace(/^www\./, '')
-  return host === 'instagram.com' || host.endsWith('.instagram.com')
-}

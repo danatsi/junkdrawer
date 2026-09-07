@@ -8,7 +8,7 @@ import type { Link } from './types'
  * Covers the cases the layout has to survive: all four tags, titles long
  * enough to wrap, rows with and without notes, a watch row with a score badge
  * and trailer, a freeform tag alongside a core one, a row still awaiting
- * enrichment, and a missing thumbnail.
+ * enrichment, a row whose enrichment failed, and a missing thumbnail.
  */
 
 /** Warm-neutral placeholder thumbnails as inline SVG, so the design renders
@@ -133,6 +133,22 @@ export const MOCK_LINKS: Link[] = [
     image_url: null,
     tags: [],
     enrichment: 'pending',
+    created_at: daysAgo(6),
+  },
+  {
+    ...base,
+    id: '9',
+    url: 'https://www.instagram.com/reel/Cx1y2z3AbCd/',
+    domain: 'instagram.com',
+    // Enrichment ran and lost. The row is still usable — it just never got a
+    // title — and the panel carries the reason plus a retry.
+    title: null,
+    description: null,
+    note: 'the pasta place in lisbon',
+    image_url: null,
+    tags: [],
+    enrichment: 'failed',
+    enrich_error: 'Gemini returned an empty response',
     created_at: daysAgo(6),
   },
   {

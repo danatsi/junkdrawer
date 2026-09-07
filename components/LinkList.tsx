@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { AnimatePresence } from 'motion/react'
 import { CORE_TAGS, type Link } from '@/lib/types'
 import { LinkRow } from './LinkRow'
@@ -11,6 +12,14 @@ import { SearchIcon, CloseIcon } from './Icons'
 import styles from './LinkList.module.css'
 
 const ALL = 'all'
+
+/** How often to re-fetch while something is still enriching. */
+const POLL_MS = 3_000
+
+/** Give up after this long. Enrichment sets `failed` on error, so a row that
+ *  stays `pending` means the function died mid-flight and no amount of polling
+ *  will resolve it — without a ceiling that row would poll forever. */
+const POLL_BUDGET_MS = 120_000
 
 /** Search matches title, domain, note and every tag — including the freeform
  *  ones that never get a chip, which is the main way to reach them. */
@@ -33,6 +42,31 @@ export function LinkList({ links }: { links: Link[] }) {
   const [archivedIds, setArchivedIds] = useState<ReadonlySet<string>>(new Set())
   const [archived, setArchived] = useState<Link | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
+  const router = useRouter()
+
+  // Enrichment finishes after this page was rendered, so without a nudge a
+  // freshly captured row would sit on "adding details" until a manual reload.
+  // Counted off the full server list, not the filtered view, so a tag filter
+  // or an open search box can't stall the poll.
+  const pendingCount = links.filter((l) => l.enrichment === 'pending').length
+
+  useEffect(() => {
+    if (pendingCount === 0) return
+
+    let elapsed = 0
+    const timer = setInterval(() => {
+      elapsed += POLL_MS
+      if (elapsed >= POLL_BUDGET_MS) {
+        clearInterval(timer)
+        return
+      }
+      router.refresh()
+    }, POLL_MS)
+
+    return () => clearInterval(timer)
+    // pendingCount rather than a boolean: a newly captured row restarts the
+    // budget instead of inheriting the tail of the previous one.
+  }, [pendingCount, router])
 
   useEffect(() => {
     if (searchOpen) searchRef.current?.focus()
