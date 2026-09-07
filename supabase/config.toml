@@ -2,6 +2,8 @@
 # installed). Deliberately minimal — the integration only needs to find this
 # file and the migrations directory beside it.
 
+
+
 # The project ref, taken from the dashboard URL:
 #   https://supabase.com/dashboard/project/<project_id>
 # Fill this in after creating the project.
