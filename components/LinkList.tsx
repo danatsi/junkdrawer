@@ -22,10 +22,18 @@ const POLL_MS = 3_000
  *  will resolve it — without a ceiling that row would poll forever. */
 const POLL_BUDGET_MS = 120_000
 
-/** Search matches title, domain, note and every tag — including the freeform
- *  ones that never get a chip, which is the main way to reach them. */
+/** Search matches title, domain, note, a screenshot's OCR'd text, and every
+ *  tag — including the freeform ones that never get a chip, which is the main
+ *  way to reach them. */
 function matchesQuery(link: Link, query: string): boolean {
-  const haystack = [link.title, link.domain, link.note, link.description, ...link.tags]
+  const haystack = [
+    link.title,
+    link.domain,
+    link.note,
+    link.description,
+    link.extracted_text,
+    ...link.tags,
+  ]
     .filter(Boolean)
     .join(' ')
     .toLowerCase()

@@ -1,7 +1,7 @@
 import 'server-only'
 import { getSupabase, isSupabaseConfigured } from './supabase'
 import { fetchOpenGraph } from './og'
-import { generateMetadata, isGeminiConfigured } from './gemini'
+import { generateFromImage, generateMetadata, isGeminiConfigured } from './gemini'
 import { fetchMovieData } from './movies'
 import type { Link } from './types'
 
@@ -72,6 +72,56 @@ export async function enrich(link: EnrichTarget): Promise<void> {
     // usable; PLAN §4 explicitly wants the domain showing as a title over an
     // empty row.
     await save(link.id, {
+      ...update,
+      enrichment: 'failed',
+      enrich_error: message.slice(0, 500),
+    })
+  }
+}
+
+/**
+ * The screenshot variant (spec §5.2). There's no page to scrape, so step 1 is
+ * a vision call instead of Open Graph — but everything after that is shared,
+ * including the watch sub-pipeline. That matters: a screenshot of a film
+ * poster reaches exactly the same TMDb and OMDb lookup a pasted IMDb link
+ * would, because that chain keys off the `watch` tag and the title, and has no
+ * idea where either came from.
+ */
+export async function enrichScreenshot(input: {
+  id: string
+  image: Buffer
+  mimeType: string
+  note: string | null
+}): Promise<void> {
+  if (!isSupabaseConfigured()) {
+    console.error('enrich: Supabase not configured; skipping', input.id)
+    return
+  }
+
+  const update: Partial<Link> = {}
+  const startedAt = Date.now()
+
+  try {
+    if (!isGeminiConfigured()) throw new Error('GEMINI_API_KEY is not set')
+
+    const generated = await generateFromImage(input)
+    if (generated.clean_title) update.title = generated.clean_title
+    if (generated.summary) update.description = generated.summary
+    if (generated.extracted_text) update.extracted_text = generated.extracted_text
+    update.tags = generated.tags
+
+    if (generated.tags.includes('watch')) {
+      const movie = await fetchMovieData(generated.clean_title)
+      if (movie.description) update.description = movie.description
+      if (movie.imdb_rating) update.imdb_rating = movie.imdb_rating
+      if (movie.trailer_url) update.trailer_url = movie.trailer_url
+    }
+
+    await save(input.id, { ...update, enrichment: 'ok', enrich_error: null })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(`enrich: screenshot failed for ${input.id} after ${Date.now() - startedAt}ms:`, message)
+    await save(input.id, {
       ...update,
       enrichment: 'failed',
       enrich_error: message.slice(0, 500),

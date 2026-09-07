@@ -2,7 +2,7 @@
 
 import { cookies } from 'next/headers'
 import { revalidatePath } from 'next/cache'
-import { saveLink } from '@/lib/capture'
+import { saveLink, saveScreenshot } from '@/lib/capture'
 import { UNLOCK_COOKIE, isValidUnlockToken } from '@/lib/unlock'
 
 export interface CaptureState {
@@ -28,7 +28,13 @@ export async function captureLink(
     return { status: 'error', message: 'Not unlocked.' }
   }
 
-  const result = await saveLink(formData.get('url'), formData.get('note'))
+  const image = formData.get('image')
+  const hasImage = image instanceof File && image.size > 0
+
+  const result = hasImage
+    ? await saveScreenshot(image, formData.get('note'))
+    : await saveLink(formData.get('url'), formData.get('note'))
+
   if (!result.ok) {
     return { status: 'error', message: result.error }
   }
@@ -36,5 +42,10 @@ export async function captureLink(
   // The list is force-dynamic, but this clears any cached render so the new
   // row is there the moment you navigate back.
   revalidatePath('/')
-  return { status: 'saved', message: 'Saved. Enriching in the background…' }
+  return {
+    status: 'saved',
+    message: hasImage
+      ? 'Screenshot saved. Reading it in the background…'
+      : 'Saved. Enriching in the background…',
+  }
 }

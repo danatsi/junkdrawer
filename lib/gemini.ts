@@ -1,5 +1,5 @@
 import 'server-only'
-import { ApiError, GoogleGenAI, Type } from '@google/genai'
+import { ApiError, GoogleGenAI, Type, type ContentListUnion } from '@google/genai'
 import { CORE_TAGS } from './types'
 import type { OgData } from './og'
 
@@ -16,6 +16,8 @@ export interface GeminiResult {
   clean_title: string
   summary: string
   tags: string[]
+  /** Only populated by the image path — OCR'd text from the screenshot. */
+  extracted_text?: string
 }
 
 /**
@@ -68,6 +70,24 @@ const RESPONSE_SCHEMA = {
   propertyOrdering: ['clean_title', 'summary', 'tags', 'freeform_tag'],
 }
 
+/** The image schema adds OCR. Kept separate rather than making extracted_text
+ *  optional on the shared schema, so the text path can't be asked for a field
+ *  it has no way to fill. */
+const IMAGE_RESPONSE_SCHEMA = {
+  ...RESPONSE_SCHEMA,
+  properties: {
+    ...RESPONSE_SCHEMA.properties,
+    extracted_text: {
+      type: Type.STRING,
+      description:
+        'Every piece of text visible in the image, verbatim, in reading order. ' +
+        'Empty string if the image has no legible text.',
+    },
+  },
+  required: [...RESPONSE_SCHEMA.required, 'extracted_text'],
+  propertyOrdering: [...RESPONSE_SCHEMA.propertyOrdering, 'extracted_text'],
+}
+
 export function isGeminiConfigured(): boolean {
   return Boolean(process.env.GEMINI_API_KEY)
 }
@@ -100,28 +120,48 @@ export async function generateMetadata(input: {
   note: string | null
   og: OgData
 }): Promise<GeminiResult> {
+  return withRetry(() => attempt(buildPrompt(input), RESPONSE_SCHEMA))
+}
+
+/**
+ * The screenshot path (spec §5.2). Same model, same schema shape plus OCR —
+ * Gemini Flash is multimodal, so this is the text pipeline with an image part
+ * bolted on rather than a separate service.
+ */
+export async function generateFromImage(input: {
+  image: Buffer
+  mimeType: string
+  note: string | null
+}): Promise<GeminiResult> {
+  const contents = [
+    {
+      parts: [
+        { inlineData: { mimeType: input.mimeType, data: input.image.toString('base64') } },
+        { text: buildImagePrompt(input.note) },
+      ],
+    },
+  ]
+  return withRetry(() => attempt(contents, IMAGE_RESPONSE_SCHEMA))
+}
+
+async function withRetry(run: () => Promise<GeminiResult>): Promise<GeminiResult> {
   try {
-    return await attempt(input)
+    return await run()
   } catch (error) {
     if (!(error instanceof ApiError) || !RETRYABLE_STATUS.has(error.status)) throw error
     console.warn(`gemini: ${error.status} from upstream, retrying once`)
     await new Promise((resolve) => setTimeout(resolve, RETRY_BACKOFF_MS))
-    return attempt(input)
+    return run()
   }
 }
 
-async function attempt(input: {
-  url: string
-  domain: string | null
-  note: string | null
-  og: OgData
-}): Promise<GeminiResult> {
+async function attempt(contents: ContentListUnion, schema: object): Promise<GeminiResult> {
   const response = await getClient().models.generateContent({
     model: MODEL,
-    contents: buildPrompt(input),
+    contents,
     config: {
       responseMimeType: 'application/json',
-      responseSchema: RESPONSE_SCHEMA,
+      responseSchema: schema,
       // Deterministic-ish: this is extraction, not writing.
       temperature: 0.2,
       abortSignal: AbortSignal.timeout(TIMEOUT_MS),
@@ -139,6 +179,7 @@ async function attempt(input: {
     summary?: unknown
     tags?: unknown
     freeform_tag?: unknown
+    extracted_text?: unknown
   }
 
   const coreTags = Array.isArray(raw.tags)
@@ -150,7 +191,34 @@ async function attempt(input: {
     clean_title: str(raw.clean_title),
     summary: str(raw.summary),
     tags: normaliseTags(coreTags, freeform),
+    extracted_text: str(raw.extracted_text) || undefined,
   }
+}
+
+function buildImagePrompt(note: string | null): string {
+  return [
+    'This is a screenshot someone saved to look at later.',
+    'Read it and produce a clean title, a short summary, tags, and its text.',
+    note
+      ? `\nthe person's own note: "${note}"\n` +
+        'The note is the PRIMARY signal for what matters about this image.'
+      : '',
+    '',
+    'Rules:',
+    `- tags: choose from ${CORE_TAGS.join(', ')}. Usually exactly one. Omit rather than guess.`,
+    // The whole point of the watch tag here: a screenshot of a film poster or
+    // a streaming app should reach the same TMDb lookup a pasted link would.
+    '- If the image shows a film or TV show — a poster, a streaming app, a',
+    '  review, a cast list — tag it "watch" and make clean_title the exact',
+    '  title of that film or show, nothing else. It gets looked up by name.',
+    '- freeform_tag: at most one specific lowercase word for what this is.',
+    '- clean_title: under 8 words, sentence case.',
+    '- summary: under 20 words describing what the screenshot shows.',
+    '- extracted_text: every legible piece of text, verbatim, in reading order.',
+    '- Never refuse. If the image is unclear, describe what you can see.',
+  ]
+    .filter(Boolean)
+    .join('\n')
 }
 
 function str(value: unknown): string {

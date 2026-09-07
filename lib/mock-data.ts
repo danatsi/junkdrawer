@@ -35,6 +35,7 @@ const base = {
   enrich_error: null,
   imdb_rating: null,
   trailer_url: null,
+  extracted_text: null,
 } as const
 
 export const MOCK_LINKS: Link[] = [

@@ -1,5 +1,6 @@
 import { LinkList } from '@/components/LinkList'
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase'
+import { signScreenshots } from '@/lib/storage'
 import { MOCK_LINKS } from '@/lib/mock-data'
 import type { Link } from '@/lib/types'
 
@@ -27,7 +28,27 @@ async function getLinks(): Promise<Link[]> {
     console.error('page: could not load links', error)
     return []
   }
-  return (data ?? []) as Link[]
+  return withSignedScreenshots((data ?? []) as Link[])
+}
+
+/**
+ * Screenshot rows store a storage object path, not a URL, because the bucket
+ * is private (see lib/storage.ts). Swap those paths for short-lived signed
+ * URLs here, so the client components stay unaware that two different kinds of
+ * thing live in `image_url`.
+ */
+async function withSignedScreenshots(links: Link[]): Promise<Link[]> {
+  const paths = links
+    .filter((l) => l.type === 'screenshot' && l.image_url)
+    .map((l) => l.image_url as string)
+  if (paths.length === 0) return links
+
+  const signed = await signScreenshots(paths)
+  return links.map((l) =>
+    l.type === 'screenshot' && l.image_url
+      ? { ...l, image_url: signed.get(l.image_url) ?? null }
+      : l,
+  )
 }
 
 export default async function Home() {
