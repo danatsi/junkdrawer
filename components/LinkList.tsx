@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import NextLink from 'next/link'
 import { AnimatePresence } from 'motion/react'
 import { CORE_TAGS, type Link } from '@/lib/types'
 import { LinkRow } from './LinkRow'
 import { ScreenshotRow } from './ScreenshotRow'
 import { SwipeableRow } from './SwipeableRow'
 import { Toast } from './Toast'
-import { SearchIcon, CloseIcon } from './Icons'
+import { SearchIcon, CloseIcon, PlusIcon } from './Icons'
 import styles from './LinkList.module.css'
 
 const ALL = 'all'
@@ -123,14 +124,20 @@ export function LinkList({ links }: { links: Link[] }) {
         <div className={styles.headerTop}>
           <h1 className={styles.wordmark}>Junk Drawer</h1>
           {!searchOpen && (
-            <button
-              type="button"
-              className={styles.searchToggle}
-              aria-label="Search links"
-              onClick={() => setSearchOpen(true)}
-            >
-              <SearchIcon />
-            </button>
+            <div className={styles.headerActions}>
+              <button
+                type="button"
+                className={styles.searchToggle}
+                aria-label="Search links"
+                onClick={() => setSearchOpen(true)}
+              >
+                <SearchIcon />
+              </button>
+              {/* Stand-in for the Shortcut, for saving from a desktop browser. */}
+              <NextLink className={styles.searchToggle} href="/capture" aria-label="Add a link">
+                <PlusIcon />
+              </NextLink>
+            </div>
           )}
         </div>
 
