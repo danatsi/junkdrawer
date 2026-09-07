@@ -1,5 +1,5 @@
 import 'server-only'
-import { GoogleGenAI, Type } from '@google/genai'
+import { ApiError, GoogleGenAI, Type } from '@google/genai'
 import { CORE_TAGS } from './types'
 import type { OgData } from './og'
 
@@ -18,21 +18,28 @@ export interface GeminiResult {
   tags: string[]
 }
 
-/** Overridable without a code change, since Gemini's model names move faster
- *  than this app will — gemini-2.5-flash was already closed to new API keys by
- *  the time this shipped, with the API itself naming 3.6-flash as the successor. */
-const MODEL = process.env.GEMINI_MODEL || 'gemini-3.6-flash'
+/**
+ * Lite on purpose. This is extraction, not reasoning, and the full flash model
+ * spends ~435 thinking tokens per call to title a link — measured at 24-31s a
+ * call and enough quota to start returning 429s after a dozen links. The lite
+ * model answers the same prompt in 2-5s on ~146 total tokens, with output that
+ * was, if anything, better.
+ *
+ * Overridable, since model names move faster than this app will: 2.5-flash was
+ * already closed to new API keys by the time this shipped.
+ */
+const MODEL = process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite'
 
 /** The SDK still defaults to v1beta, where the current flash models 404 (with
  *  an empty body, so the failure is silent unless you check the status). Every
  *  model from 3.x on is only served from v1. */
 const API_VERSION = 'v1'
 
-/** Generous because the free tier queues concurrent calls rather than
- *  rejecting them: a lone request answers in ~3s, but three at once left two
- *  still waiting at 15s. The route's budget is 60s and the other steps cap at
- *  ~20s combined, so this is the slack that's actually available. */
-const TIMEOUT_MS = 30_000
+/** Generous relative to the ~3s a lite call takes, because the free tier
+ *  queues concurrent requests rather than rejecting them — three at once has
+ *  been measured pushing well past 15s. Two attempts plus the scrape and the
+ *  watch chain still fit inside the route's 60s budget. */
+const TIMEOUT_MS = 20_000
 
 const RESPONSE_SCHEMA = {
   type: Type.OBJECT,
@@ -75,7 +82,35 @@ function getClient(): GoogleGenAI {
   return client
 }
 
+/**
+ * Transient upstream failures worth a second attempt. The free tier throws
+ * 503 "experiencing high demand" often enough to matter — two in a dozen calls
+ * while testing — and those come back in under two seconds, so retrying costs
+ * almost nothing against the route's budget.
+ *
+ * A timeout is deliberately not retryable: it has already spent 30s, and a
+ * second attempt wouldn't fit alongside the scrape and the watch chain.
+ */
+const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504])
+const RETRY_BACKOFF_MS = 1_500
+
 export async function generateMetadata(input: {
+  url: string
+  domain: string | null
+  note: string | null
+  og: OgData
+}): Promise<GeminiResult> {
+  try {
+    return await attempt(input)
+  } catch (error) {
+    if (!(error instanceof ApiError) || !RETRYABLE_STATUS.has(error.status)) throw error
+    console.warn(`gemini: ${error.status} from upstream, retrying once`)
+    await new Promise((resolve) => setTimeout(resolve, RETRY_BACKOFF_MS))
+    return attempt(input)
+  }
+}
+
+async function attempt(input: {
   url: string
   domain: string | null
   note: string | null
