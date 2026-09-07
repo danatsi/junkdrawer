@@ -46,6 +46,41 @@
   color: var(--color-text-secondary);
 }
 
+/* A pending row is real and tappable, so it gets a quiet shimmer rather than
+   a skeleton standing in for the whole row: only the parts that are genuinely
+   still missing move. */
+.thumbPending {
+  background: linear-gradient(
+    100deg,
+    var(--color-thumb-placeholder) 30%,
+    var(--color-divider) 50%,
+    var(--color-thumb-placeholder) 70%
+  );
+  background-size: 300% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+.pendingNote {
+  animation: breathe 1.6s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  from { background-position: 150% 0; }
+  to { background-position: -150% 0; }
+}
+
+@keyframes breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thumbPending,
+  .pendingNote {
+    animation: none;
+  }
+}
+
 .score {
   background: var(--color-accent-bg);
   color: var(--color-accent);
@@ -139,7 +174,12 @@
 
 /* --- screenshot rows (spec §5.5) --- */
 
-/* No URL to open, so the whole body is the expand toggle. */
+/* No URL to open, so the whole row is the expand toggle (spec §5.5) —
+   the pointer has to cover the padding and the chevron, not just the body. */
+.rowClickable {
+  cursor: pointer;
+}
+
 .rowToggle {
   display: flex;
   flex: 1;

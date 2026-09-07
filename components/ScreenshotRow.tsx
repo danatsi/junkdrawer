@@ -9,9 +9,9 @@ import styles from './LinkRow.module.css'
 
 /**
  * Screenshot variant (spec §5.5). A screenshot has no external URL, so the
- * interaction model differs from a link row: the whole body toggles the panel
- * instead of linking out, and the chevron is affordance only — it rotates but
- * isn't separately tappable.
+ * interaction model differs from a link row: instead of linking out, *any* tap
+ * on the row toggles the panel — the body, the chevron, and the padding around
+ * them. Only the share button is carved out.
  *
  * Sharing also differs (spec §5.6): wa.me can only pre-fill text, so sending
  * the actual image needs the Web Share API, which opens the OS picker rather
@@ -45,15 +45,12 @@ export function ScreenshotRow({ link }: { link: Link }) {
     }
   }
 
+  const toggle = () => setOpen((v) => !v)
+
   return (
     <>
-      <div className={styles.row}>
-        <button
-          type="button"
-          className={styles.rowToggle}
-          aria-expanded={open}
-          onClick={() => setOpen((v) => !v)}
-        >
+      <div className={`${styles.row} ${styles.rowClickable}`} onClick={toggle}>
+        <div className={styles.rowToggle}>
           {image ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img className={styles.thumb} src={image} alt="" loading="lazy" />
@@ -68,7 +65,7 @@ export function ScreenshotRow({ link }: { link: Link }) {
               <span className={styles.tagAccent}>screenshot</span>
             </div>
           </div>
-        </button>
+        </div>
 
         <div className={styles.actions}>
           <button
@@ -79,13 +76,20 @@ export function ScreenshotRow({ link }: { link: Link }) {
           >
             <ShareIcon />
           </button>
-          {/* Affordance only — the row body is the control. */}
-          <span
+          {/* The row already handles the tap; this stays a real button so the
+              row is still keyboard-reachable and announces its state. */}
+          <button
+            type="button"
             className={`${styles.iconBtn} ${styles.chevron} ${open ? styles.chevronOpen : ''}`}
-            aria-hidden="true"
+            aria-label={open ? 'Collapse details' : 'Expand details'}
+            aria-expanded={open}
+            onClick={(e) => {
+              e.stopPropagation()
+              toggle()
+            }}
           >
             <ChevronIcon />
-          </span>
+          </button>
         </div>
       </div>
 

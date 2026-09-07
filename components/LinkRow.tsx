@@ -18,7 +18,11 @@ export function LinkRow({ link }: { link: Link }) {
   const isWatch = link.tags.includes('watch')
   const primaryTag = link.tags[0] ?? null
   const hasPanel = Boolean(link.note || link.description)
-  const awaitingTitle = link.enrichment === 'pending' && !link.title
+  // Enrichment runs after the capture endpoint has already returned, so a row
+  // is live and tappable before it has a title, a thumbnail or tags. Say so
+  // rather than rendering it as a finished row that happens to look thin.
+  const isPending = link.enrichment === 'pending'
+  const awaitingTitle = isPending && !link.title
 
   return (
     <>
@@ -30,7 +34,7 @@ export function LinkRow({ link }: { link: Link }) {
             // eslint-disable-next-line @next/next/no-img-element
             <img className={styles.thumb} src={link.image_url} alt="" loading="lazy" />
           ) : (
-            <div className={styles.thumb} />
+            <div className={`${styles.thumb} ${isPending ? styles.thumbPending : ''}`} />
           )}
           <div className={styles.content}>
             <div className={styles.titleLine}>
@@ -46,11 +50,18 @@ export function LinkRow({ link }: { link: Link }) {
             </div>
             <div className={styles.meta}>
               {link.domain}
-              {primaryTag && (
+              {isPending ? (
                 <>
                   {' · '}
-                  <span className={isWatch ? styles.tagWatch : undefined}>{primaryTag}</span>
+                  <span className={styles.pendingNote}>adding details</span>
                 </>
+              ) : (
+                primaryTag && (
+                  <>
+                    {' · '}
+                    <span className={isWatch ? styles.tagWatch : undefined}>{primaryTag}</span>
+                  </>
+                )
               )}
             </div>
           </div>
