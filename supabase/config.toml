@@ -1,0 +1,8 @@
+# Read by the Supabase GitHub integration (and by the CLI, if it ever gets
+# installed). Deliberately minimal — the integration only needs to find this
+# file and the migrations directory beside it.
+
+# The project ref, taken from the dashboard URL:
+#   https://supabase.com/dashboard/project/<project_id>
+# Fill this in after creating the project.
+project_id = "mhokrnfutnbejwbcjlkd"

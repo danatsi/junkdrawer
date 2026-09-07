@@ -1,5 +1,11 @@
--- Junk Drawer schema. See PLAN.md §2 and link-box-spec.md §3.2.
--- Run once in the Supabase SQL editor.
+-- Junk Drawer: initial schema. See PLAN.md §2 and link-box-spec.md §3.2.
+--
+-- Applied by the Supabase GitHub integration on push to main. Migrations are
+-- append-only: to change the schema later, add a new timestamped file rather
+-- than editing this one, or the remote history stops matching.
+--
+-- Guarded with `if not exists` so it's also safe to paste into the SQL editor
+-- by hand, and safe to re-run against a database that already has the table.
 
 create table if not exists links (
   id            uuid primary key default gen_random_uuid(),
