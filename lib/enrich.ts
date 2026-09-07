@@ -1,6 +1,7 @@
 import 'server-only'
 import { getSupabase, isSupabaseConfigured } from './supabase'
 import { fetchOpenGraph } from './og'
+import { ensureFavicon } from './icons'
 import { generateFromImage, generateMetadata, isGeminiConfigured } from './gemini'
 import { fetchMovieData } from './movies'
 import type { Link } from './types'
@@ -36,7 +37,10 @@ export async function enrich(link: EnrichTarget): Promise<void> {
     const og = await fetchOpenGraph(link.url)
     if (og.title) update.title = og.title
     if (og.description) update.description = og.description
-    if (og.image) update.image_url = og.image
+    if (og.image) {
+      update.image_url = og.image
+      update.image_kind = 'photo'
+    }
 
     // 2. Gemini. Its title supersedes the scraped one (spec §4.5: titles are
     //    the generated clean title, not the raw page title).
@@ -60,6 +64,17 @@ export async function enrich(link: EnrichTarget): Promise<void> {
       if (movie.description) update.description = movie.description
       if (movie.imdb_rating) update.imdb_rating = movie.imdb_rating
       if (movie.trailer_url) update.trailer_url = movie.trailer_url
+    }
+
+    // No usable photo — most large retailers block scraping entirely, so this
+    // is the common case rather than the exception. The brand's own icon is
+    // still recognisable at 40px and beats an empty square.
+    if (!update.image_url) {
+      const favicon = await ensureFavicon(link.domain, og.iconHref)
+      if (favicon) {
+        update.image_url = favicon
+        update.image_kind = 'icon'
+      }
     }
 
     await save(link.id, { ...update, enrichment: 'ok', enrich_error: null })

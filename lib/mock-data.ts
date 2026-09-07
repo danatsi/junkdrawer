@@ -36,6 +36,7 @@ const base = {
   imdb_rating: null,
   trailer_url: null,
   extracted_text: null,
+  image_kind: null,
 } as const
 
 export const MOCK_LINKS: Link[] = [
@@ -48,7 +49,7 @@ export const MOCK_LINKS: Link[] = [
     description:
       "A young chef returns home to run his family's Chicago sandwich shop after a family tragedy.",
     note: 'Her recommendation from Sunday.',
-    image_url: thumb('#D9C9A8', '#B99B6B'),
+    image_kind: 'photo' as const, image_url: thumb('#D9C9A8', '#B99B6B'),
     tags: ['watch', 'drama'],
     imdb_rating: '8.7',
     trailer_url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
@@ -62,7 +63,7 @@ export const MOCK_LINKS: Link[] = [
     title: 'Wool overshirt, camel',
     description: null,
     note: 'Compare to the Uniqlo one before buying.',
-    image_url: thumb('#E0D2BC', '#C4A882'),
+    image_kind: 'photo' as const, image_url: thumb('#E0D2BC', '#C4A882'),
     tags: ['shopping', 'outerwear'],
     created_at: daysAgo(1),
   },
@@ -74,7 +75,7 @@ export const MOCK_LINKS: Link[] = [
     title: 'Braised short rib with polenta',
     description: null,
     note: 'For dinner Saturday, start 4hrs ahead.',
-    image_url: thumb('#D6C4A0', '#A98A5C'),
+    image_kind: 'photo' as const, image_url: thumb('#D6C4A0', '#A98A5C'),
     tags: ['recipe'],
     created_at: daysAgo(2),
   },
@@ -88,7 +89,7 @@ export const MOCK_LINKS: Link[] = [
     // No note and no description: the chevron slot must stay reserved and
     // invisible here so the WhatsApp icon doesn't shift against its neighbours.
     note: null,
-    image_url: thumb('#CFC3AE', '#9E8E74'),
+    image_kind: 'photo' as const, image_url: thumb('#CFC3AE', '#9E8E74'),
     tags: ['read', 'longread'],
     created_at: daysAgo(3),
   },
@@ -101,7 +102,7 @@ export const MOCK_LINKS: Link[] = [
     description:
       'Paul Atreides unites with the Fremen to seek revenge against the conspirators who destroyed his family.',
     note: null,
-    image_url: thumb('#E2D3B4', '#BFA173'),
+    image_kind: 'photo' as const, image_url: thumb('#E2D3B4', '#BFA173'),
     tags: ['watch'],
     imdb_rating: '8.5',
     trailer_url: 'https://www.youtube.com/watch?v=Way9Dexny3w',
@@ -162,7 +163,7 @@ export const MOCK_LINKS: Link[] = [
     description:
       'Extracted: "Lemon ricotta pasta — 500g pasta, 250g ricotta, zest of 2 lemons, parmesan, black pepper." Saved from an Instagram story.',
     note: null,
-    image_url: screenshot(),
+    image_kind: 'photo' as const, image_url: screenshot(),
     tags: ['recipe'],
     created_at: daysAgo(2),
   },

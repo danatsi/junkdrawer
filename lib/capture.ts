@@ -107,6 +107,7 @@ export async function saveScreenshot(file: unknown, rawNote: unknown): Promise<C
       // The object path, not a URL: the bucket is private, so the list signs
       // it at render time (see lib/storage.ts).
       image_url: objectPath,
+      image_kind: 'photo',
       type: 'screenshot',
       status: 'unread',
       enrichment: 'pending',

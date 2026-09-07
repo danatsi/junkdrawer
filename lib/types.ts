@@ -16,6 +16,9 @@ export interface Link {
   title: string | null
   description: string | null
   image_url: string | null
+  /** Whether image_url is a real photo (crop to fill) or a site favicon
+   *  standing in for one (contain and pad). Null when there's no image. */
+  image_kind: 'photo' | 'icon' | null
   domain: string | null
   tags: string[]
   status: LinkStatus

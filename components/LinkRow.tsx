@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { Link } from '@/lib/types'
 import { displayTitle } from '@/lib/types'
+import { generatedThumb } from '@/lib/thumb'
 import { ChevronIcon, StarIcon, WhatsAppIcon } from './Icons'
 import styles from './LinkRow.module.css'
 
@@ -35,6 +36,7 @@ export function LinkRow({ link }: { link: Link }) {
   // place a retry button can legally live — the meta line is inside the row's
   // anchor, and a <button> can't nest in an <a>.
   const hasPanel = Boolean(link.note || link.description || hasFailed)
+  const thumb = generatedThumb(link)
 
   async function retry(e: React.MouseEvent) {
     e.stopPropagation()
@@ -68,11 +70,23 @@ export function LinkRow({ link }: { link: Link }) {
         <a className={styles.rowLink} href={link.url} target="_blank" rel="noopener noreferrer">
           {link.image_url ? (
             // Arbitrary scraped hosts, and these are 40px — next/image's
-            // optimizer would cost more than it saves here.
+            // optimizer would cost more than it saves here. A favicon is
+            // contained rather than cropped, or it renders stretched.
             // eslint-disable-next-line @next/next/no-img-element
-            <img className={styles.thumb} src={link.image_url} alt="" loading="lazy" />
+            <img
+              className={`${styles.thumb} ${link.image_kind === 'icon' ? styles.thumbIcon : ''}`}
+              src={link.image_url}
+              alt=""
+              loading="lazy"
+            />
+          ) : isPending ? (
+            <div className={`${styles.thumb} ${styles.thumbPending}`} />
           ) : (
-            <div className={`${styles.thumb} ${isPending ? styles.thumbPending : ''}`} />
+            // Nothing scraped and no favicon: derive a tile so the row still
+            // reads as a row rather than a gap.
+            <div className={`${styles.thumb} ${styles.thumbGenerated}`} style={{ background: thumb.background }}>
+              {thumb.monogram}
+            </div>
           )}
           <div className={styles.content}>
             <div className={styles.titleLine}>

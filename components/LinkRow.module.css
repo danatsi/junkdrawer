@@ -24,6 +24,23 @@
   object-fit: cover;
 }
 
+.thumbIcon {
+  object-fit: contain;
+  padding: 7px;
+  background: var(--color-thumb-placeholder);
+}
+
+/* The floor of the fallback chain — a tile derived from the domain. */
+.thumbGenerated {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-serif);
+  font-size: 16px;
+  color: var(--color-text-secondary);
+  opacity: 0.85;
+}
+
 .content {
   flex: 1;
   min-width: 0;

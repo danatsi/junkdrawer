@@ -1,5 +1,5 @@
 import 'server-only'
-import { parse } from 'node-html-parser'
+import { parse, type HTMLElement } from 'node-html-parser'
 
 /**
  * Step 1 of the enrichment pipeline (spec §3.3): a plain HTTP fetch and four
@@ -15,6 +15,9 @@ export interface OgData {
   title?: string
   description?: string
   image?: string
+  /** The site's own icon, if the page declared one. Used as a fallback
+   *  thumbnail when there's no real image to show. */
+  iconHref?: string
 }
 
 /** Long enough for a slow CDN, short enough that the watch sub-pipeline still
@@ -81,14 +84,93 @@ export function parseOpenGraph(html: string, baseUrl: string): OgData {
 
   const title = pick('og:title', 'twitter:title') ?? root.querySelector('title')?.text?.trim()
   const description = pick('og:description', 'twitter:description', 'description')
-  const image = pick('og:image', 'og:image:url', 'og:image:secure_url', 'twitter:image')
+
+  // Order matters: og:image first because it's the site's own choice of
+  // preview, then structured data, then the legacy link tag. IKEA is the case
+  // that motivated going past og:image — it ships `og:image content=""` and
+  // puts the real product photo in JSON-LD.
+  const image =
+    pick('og:image', 'og:image:url', 'og:image:secure_url', 'twitter:image') ??
+    findStructuredImage(root) ??
+    root.querySelector('link[rel="image_src"]')?.getAttribute('href')
 
   return {
     title: clean(title),
     description: clean(description),
     // og:image is often a site-relative path.
     image: image ? absolute(image, baseUrl) : undefined,
+    iconHref: findIconHref(root, baseUrl),
   }
+}
+
+/**
+ * Pulls a product/article image out of JSON-LD. Schema.org's `image` is
+ * maddeningly polymorphic — a string, an array, an ImageObject, or all of the
+ * above nested under @graph — so this walks the parsed object rather than
+ * trying to match a shape.
+ */
+function findStructuredImage(root: HTMLElement): string | undefined {
+  for (const script of root.querySelectorAll('script[type="application/ld+json"]')) {
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(script.text)
+    } catch {
+      // Sites ship invalid JSON-LD surprisingly often; skip and try the next.
+      continue
+    }
+    const found = firstImageIn(parsed, 0)
+    if (found) return found
+  }
+  return undefined
+}
+
+function firstImageIn(node: unknown, depth: number): string | undefined {
+  if (depth > 6 || node == null) return undefined
+  if (typeof node === 'string') return isImageUrl(node) ? node : undefined
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      const found = firstImageIn(item, depth + 1)
+      if (found) return found
+    }
+    return undefined
+  }
+  if (typeof node !== 'object') return undefined
+
+  const record = node as Record<string, unknown>
+  // Prefer an explicit image field before recursing into unrelated branches.
+  for (const key of ['image', 'thumbnailUrl', 'contentUrl', 'url']) {
+    if (key in record) {
+      const found = firstImageIn(record[key], depth + 1)
+      if (found) return found
+    }
+  }
+  for (const [key, value] of Object.entries(record)) {
+    if (key === 'image' || key === 'thumbnailUrl' || key === 'contentUrl') continue
+    const found = firstImageIn(value, depth + 1)
+    if (found) return found
+  }
+  return undefined
+}
+
+function isImageUrl(value: string): boolean {
+  return /^https?:\/\//i.test(value) && /\.(jpe?g|png|webp|avif|gif)(\?|$)/i.test(value)
+}
+
+/** The page's declared icon, best size first. */
+function findIconHref(root: HTMLElement, baseUrl: string): string | undefined {
+  const candidates = [
+    'link[rel="apple-touch-icon"]',
+    'link[rel="icon"]',
+    'link[rel="shortcut icon"]',
+  ]
+  for (const selector of candidates) {
+    const href = root.querySelector(selector)?.getAttribute('href')
+    if (href) {
+      const resolved = absolute(href, baseUrl)
+      if (resolved) return resolved
+    }
+  }
+  return undefined
 }
 
 function clean(value: string | undefined): string | undefined {
