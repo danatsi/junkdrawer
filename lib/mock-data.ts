@@ -9,6 +9,12 @@ import type { Link } from './types'
  * enough to wrap, rows with and without notes, a watch row with a score badge
  * and trailer, a freeform tag alongside a core one, a row still awaiting
  * enrichment, a row whose enrichment failed, and a missing thumbnail.
+ *
+ * Also the mixed-script cases, which are easy to break and impossible to spot
+ * without them in the list: Hebrew titles that have to lay out right-to-left
+ * off their own first strong character, a Hebrew title with Latin runs inside
+ * it, and a Hebrew screenshot. And an `icon` row, which must show the derived
+ * monogram tile rather than the favicon it stores.
  */
 
 /** Warm-neutral placeholder thumbnails as inline SVG, so the design renders
@@ -155,6 +161,53 @@ export const MOCK_LINKS: Link[] = [
   },
   {
     ...base,
+    id: '10',
+    url: 'https://e-vrit.co.il/product/hachi-lo-eshet-chayil',
+    domain: 'e-vrit.co.il',
+    // The row this whole change exists for. The page title was
+    // "הכי לא אשת חיל - סופי קינסלה | עברית - חנות ספרים"; og.ts cuts the site
+    // chrome off the end and the author survives. Handing it to the model
+    // instead is what used to return "achi lo eshet hayil".
+    title: 'הכי לא אשת חיל - סופי קינסלה',
+    description: 'רומן קומי על אישה שמנסה להיות מושלמת בכל החזיתות ונכשלת בכולן.',
+    note: 'אמא המליצה. לקנות לפני הטיסה.',
+    image_kind: 'photo' as const, image_url: thumb('#DCCDB2', '#B59A6E'),
+    tags: ['read'],
+    created_at: daysAgo(1),
+  },
+  {
+    ...base,
+    id: '11',
+    url: 'https://www.foodish.co.il/recipe/challah',
+    domain: 'foodish.co.il',
+    // Latin runs inside a Hebrew title. dir="auto" keys off the first strong
+    // character, so the line stays right-to-left and "180C" sits where it
+    // belongs instead of jumping to the far end.
+    title: 'חלה מתוקה של שישי - 180C, 40 דקות',
+    description: null,
+    note: 'להכפיל את הכמות, יוצא קטן מדי.',
+    image_kind: 'photo' as const, image_url: thumb('#E3D6BB', '#C0A578'),
+    tags: ['recipe'],
+    created_at: daysAgo(3),
+  },
+  {
+    ...base,
+    id: '12',
+    url: 'https://www.ikea.com/il/he/p/billy-bookcase',
+    domain: 'ikea.com',
+    // Nothing scraped but a favicon. image_kind 'icon' is stored and ignored:
+    // the row renders the monogram tile, so its left edge matches every other
+    // row instead of holding a 40px logo.
+    title: 'BILLY ספריה, לבן',
+    description: null,
+    note: null,
+    image_kind: 'icon' as const,
+    image_url: 'https://www.ikea.com/favicon.ico',
+    tags: ['shopping'],
+    created_at: daysAgo(4),
+  },
+  {
+    ...base,
     id: '8',
     type: 'screenshot',
     url: '',
@@ -166,5 +219,21 @@ export const MOCK_LINKS: Link[] = [
     image_kind: 'photo' as const, image_url: screenshot(),
     tags: ['recipe'],
     created_at: daysAgo(2),
+  },
+  {
+    ...base,
+    id: '13',
+    type: 'screenshot',
+    url: '',
+    domain: null,
+    // A screenshot whose OCR came back in Hebrew. Its title and panel text run
+    // through the same dir="auto" as the link rows.
+    title: 'שעות פתיחה - המעבדה',
+    description: 'צילום מסך של שעות הפתיחה: ראשון עד חמישי, 09:00-18:00, שישי עד 14:00.',
+    note: null,
+    image_kind: 'photo' as const, image_url: screenshot(),
+    tags: ['read'],
+    extracted_text: 'המעבדה\nראשון-חמישי 09:00-18:00\nשישי 09:00-14:00',
+    created_at: daysAgo(5),
   },
 ]

@@ -12,6 +12,8 @@ import { parse, type HTMLElement } from 'node-html-parser'
  * live and usable either way.
  */
 export interface OgData {
+  /** Already cut down to the page's own title — trailing site chrome
+   *  ("… | Store Name") is removed by `stripSiteChrome`. */
   title?: string
   description?: string
   image?: string
@@ -82,7 +84,9 @@ export function parseOpenGraph(html: string, baseUrl: string): OgData {
 
   const pick = (...keys: string[]) => keys.map((k) => meta.get(k)).find(Boolean)
 
-  const title = pick('og:title', 'twitter:title') ?? root.querySelector('title')?.text?.trim()
+  const rawTitle = pick('og:title', 'twitter:title') ?? root.querySelector('title')?.text?.trim()
+  const cleanedTitle = clean(rawTitle)
+  const title = cleanedTitle && stripSiteChrome(cleanedTitle, pick('og:site_name'), baseUrl)
   const description = pick('og:description', 'twitter:description', 'description')
 
   // Order matters: og:image first because it's the site's own choice of
@@ -95,7 +99,7 @@ export function parseOpenGraph(html: string, baseUrl: string): OgData {
     root.querySelector('link[rel="image_src"]')?.getAttribute('href')
 
   return {
-    title: clean(title),
+    title,
     description: clean(description),
     // og:image is often a site-relative path.
     image: image ? absolute(image, baseUrl) : undefined,
@@ -171,6 +175,87 @@ function findIconHref(root: HTMLElement, baseUrl: string): string | undefined {
     }
   }
   return undefined
+}
+
+/**
+ * Cuts the trailing site chrome off a scraped title — "… | Store Name",
+ * "… - Shop". That chrome is the whole reason the title used to be handed to
+ * the model to rewrite, and rewriting it is what turned a Hebrew book page
+ * into Latin letters. Doing the cut here keeps the title in the page's own
+ * words and its own script.
+ *
+ * Only a segment that actually *names the site* is dropped, never one that
+ * merely sits last: "הכי לא אשת חיל - סופי קינסלה | עברית - חנות ספרים" loses
+ * everything from "עברית" onwards, and the author survives.
+ */
+export function stripSiteChrome(
+  title: string,
+  siteName: string | undefined,
+  baseUrl: string,
+): string {
+  const names = siteIdentifiers(siteName, baseUrl)
+  if (names.length === 0) return title
+
+  // Capturing split, so the separators survive and the kept half can be
+  // rebuilt exactly as the page wrote it.
+  const parts = title.split(/(\s+[|\u2013\u2014·»]\s+|\s+-\s+)/)
+  // A leading "NYT Cooking - " is the same chrome facing the other way.
+  if (parts.length > 2 && namesSite(parts[0], names)) {
+    const kept = parts.slice(2).join('').trim()
+    if (kept.length >= 2) return stripSiteChrome(kept, siteName, baseUrl)
+  }
+  for (let i = 2; i < parts.length; i += 2) {
+    if (!namesSite(parts[i], names)) continue
+    // Everything from the first site-naming segment on is chrome — a site
+    // name is never followed by more of the title.
+    const kept = parts.slice(0, i - 1).join('').trim()
+    return kept.length >= 2 ? kept : title
+  }
+  return title
+}
+
+/**
+ * A scraped title that says nothing about the page: a bot interstitial, a
+ * login wall, or the bare site name. These are the cases the model is still
+ * better at than the scrape, since it can at least read the URL path.
+ */
+export function isPlaceholderTitle(title: string, baseUrl: string): boolean {
+  const normalised = normalise(title)
+  if (normalised.length < 3) return true
+  if (siteIdentifiers(undefined, baseUrl).includes(normalised)) return true
+  return /^(just a moment|attention required|access denied|forbidden|error|not found|page not found|404|403|robot check|are you a robot|please enable javascript|enable javascript|log ?in|sign ?in|redirecting|loading)\b/i.test(
+    title.trim(),
+  )
+}
+
+/** The names a segment could be using to identify the site: whatever
+ *  `og:site_name` declared, plus the brand label out of the hostname. */
+function siteIdentifiers(siteName: string | undefined, baseUrl: string): string[] {
+  const out: string[] = []
+  const declared = siteName && normalise(siteName)
+  if (declared) out.push(declared)
+  try {
+    const host = new URL(baseUrl).hostname.replace(/^www\./, '')
+    const brand = normalise(host.split('.')[0] ?? '')
+    if (brand && !out.includes(brand)) out.push(brand)
+  } catch {
+    // A malformed base URL just means one fewer identifier.
+  }
+  return out.filter(Boolean)
+}
+
+function namesSite(segment: string, names: string[]): boolean {
+  const normalised = normalise(segment)
+  if (!normalised) return false
+  // Equality for short names ("etsy", "עברית"); containment only for longer
+  // ones, so a two-letter brand can't match half the words in a title.
+  return names.some((name) => normalised === name || (name.length >= 4 && normalised.includes(name)))
+}
+
+/** Case- and punctuation-insensitive, so "E-Vrit" and "evrit" compare equal.
+ *  Unicode classes rather than a-z: the titles this exists for aren't Latin. */
+function normalise(value: string): string {
+  return value.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '')
 }
 
 function clean(value: string | undefined): string | undefined {

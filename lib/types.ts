@@ -16,8 +16,11 @@ export interface Link {
   title: string | null
   description: string | null
   image_url: string | null
-  /** Whether image_url is a real photo (crop to fill) or a site favicon
-   *  standing in for one (contain and pad). Null when there's no image. */
+  /** Whether image_url is a real photo or a site favicon standing in for one.
+   *  Null when there's no image. Only 'photo' is rendered as a thumbnail — an
+   *  'icon' is stored but deliberately not shown, because a favicon shrunk
+   *  into the 40px square reads as clutter; those rows get the derived
+   *  monogram tile instead (see LinkRow). */
   image_kind: 'photo' | 'icon' | null
   domain: string | null
   tags: string[]

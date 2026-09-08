@@ -1,7 +1,10 @@
 import 'server-only'
+import { createHash } from 'node:crypto'
 import { getSupabase, isSupabaseConfigured } from './supabase'
-import { fetchOpenGraph } from './og'
+import { fetchOpenGraph, isPlaceholderTitle } from './og'
 import { ensureFavicon } from './icons'
+import { fetchImage } from './fetch-image'
+import { uploadImage } from './storage'
 import { generateFromImage, generateMetadata, isGeminiConfigured } from './gemini'
 import { extractImdbId, fetchMovieData, fetchMovieDataByImdbId, type MovieData } from './movies'
 import type { Link } from './types'
@@ -54,15 +57,33 @@ export async function enrich(link: EnrichTarget): Promise<void> {
       if (movie.description) og.description = movie.description
     }
 
-    if (og.title) update.title = og.title
+    // The page's own title wins when it has one. It is free, it is exact, and
+    // it is in the language the page is written in — a Hebrew book came back
+    // as "achi lo eshet hayil" when the model was the one naming rows. Site
+    // chrome is already stripped in og.ts, so what's left needs no rewriting.
+    const scrapedTitle = og.title && !isPlaceholderTitle(og.title, link.url) ? og.title : undefined
+    if (scrapedTitle) update.title = scrapedTitle
     if (og.description) update.description = og.description
+    // A scraped image is copied into our own bucket rather than hot-linked.
+    // Hot-linking would have the browser fetch from the retailer's CDN on
+    // every render, telling that CDN which item you saved — the same objection
+    // `lib/icons.ts` already makes for favicons, and sharper here, because a
+    // product image URL identifies the specific thing rather than the shop.
+    // A failure here deliberately leaves `image_url` unset so the favicon
+    // fallback below takes over; falling back to the hot-link would defeat
+    // the point.
     if (og.image && !link.keepImage) {
-      update.image_url = og.image
-      update.image_kind = 'photo'
+      const stored = await persistScrapedImage(og.image)
+      if (stored) {
+        update.image_url = stored
+        update.image_kind = 'photo'
+      }
     }
 
-    // 2. Gemini. Its title supersedes the scraped one (spec §4.5: titles are
-    //    the generated clean title, not the raw page title).
+    // 2. Gemini. Still the source of tags and the summary, but it only names
+    //    the row when the scrape came back with nothing usable — a blocked
+    //    site, a bot interstitial, or a bare site name. Then a title inferred
+    //    from the URL beats no title at all.
     if (!isGeminiConfigured()) {
       throw new Error('GEMINI_API_KEY is not set')
     }
@@ -72,7 +93,7 @@ export async function enrich(link: EnrichTarget): Promise<void> {
       note: link.note,
       og,
     })
-    if (generated.clean_title) update.title = generated.clean_title
+    if (generated.clean_title && !scrapedTitle) update.title = generated.clean_title
     if (generated.summary) update.description = generated.summary
     update.tags = generated.tags
 
@@ -167,6 +188,53 @@ export async function enrichScreenshot(input: {
       enrichment: 'failed',
       enrich_error: message.slice(0, 500),
     })
+  }
+}
+
+/** A product photo, not a screenshot — generous enough for a retailer's
+ *  full-size image, mean enough that an unbounded CDN response is refused. */
+const MAX_SCRAPED_IMAGE_BYTES = 2 * 1024 * 1024
+
+const EXTENSIONS: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'image/avif': 'avif',
+  'image/gif': 'gif',
+}
+
+/**
+ * Copies a scraped image into the private `items` bucket and returns its
+ * `storage:` reference, or null if it couldn't be had. `app/page.tsx` swaps
+ * that reference for a signed URL at render time, so this needs no cooperation
+ * from the components.
+ */
+async function persistScrapedImage(imageUrl: string): Promise<string | null> {
+  const fetched = await fetchImage(imageUrl, MAX_SCRAPED_IMAGE_BYTES)
+  if (!fetched) return null
+
+  // The bare type, since a CDN may send "image/jpeg; charset=binary".
+  const mimeType = fetched.contentType.split(';')[0].trim().toLowerCase()
+  const extension = EXTENSIONS[mimeType]
+  if (!extension) return null
+
+  // Content-addressed on the source URL rather than a random id: re-sharing a
+  // link re-enriches it (capture upserts on url), and a fresh name per run
+  // would leave the previous copy orphaned in the bucket every time.
+  const name = createHash('sha256').update(imageUrl).digest('hex').slice(0, 32)
+
+  try {
+    return await uploadImage(
+      'items',
+      `${name}.${extension}`,
+      new Blob([fetched.body], { type: mimeType }),
+      { upsert: true },
+    )
+  } catch (error) {
+    // Same reasoning as the capture path: losing the thumbnail is not worth
+    // losing the enrichment over.
+    console.error('enrich: could not store scraped image', imageUrl, error)
+    return null
   }
 }
 

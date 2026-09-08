@@ -48,7 +48,9 @@ const RESPONSE_SCHEMA = {
   properties: {
     clean_title: {
       type: Type.STRING,
-      description: 'Under 8 words. Sentence case. No site name, no clickbait.',
+      description:
+        'Under 8 words. Sentence case. No site name, no clickbait. ' +
+        'Same language and script as the source.',
     },
     summary: {
       type: Type.STRING,
@@ -218,7 +220,9 @@ function buildImagePrompt(note: string | null): string {
     '4. freeform_tag: at most one specific lowercase word for what this is.',
     '5. summary: under 20 words describing what the screenshot shows.',
     '6. extracted_text: every legible piece of text, verbatim, in reading order.',
-    '7. Never refuse. If the image is unclear, describe what you can see.',
+    '7. Write clean_title and summary in the language and script of the text in',
+    '   the image. Never transliterate it into Latin letters.',
+    '8. Never refuse. If the image is unclear, describe what you can see.',
     note
       ? `\nThe person's own note: "${note}"\n` +
         'Use it for the summary and the tags — it says why this was worth saving. ' +
@@ -286,6 +290,11 @@ function buildPrompt({
     '- freeform_tag: at most one specific lowercase word for what this actually is.',
     '- clean_title: under 8 words, sentence case, no site name or marketing padding.',
     '- summary: under 20 words, one sentence, plain and factual.',
+    // A Hebrew book page came back titled "achi lo eshet hayil". Latin letters
+    // are the model's default for everything, and a transliteration is
+    // unreadable to someone who reads the script it came from.
+    '- Write clean_title and summary in the language and script of the page itself.',
+    '  Never transliterate or translate Hebrew, Arabic, Cyrillic or CJK into Latin letters.',
     // Refusing is the one genuinely useless outcome: a row with no title at
     // all is worse than a row titled from its own URL.
     '- If the scraped data is thin or missing, infer from the URL path and domain.',
