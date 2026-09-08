@@ -14,8 +14,15 @@ function whatsAppHref(link: Link): string {
   return `https://wa.me/?text=${encodeURIComponent(`${displayTitle(link)} ${link.url}`)}`
 }
 
-export function LinkRow({ link }: { link: Link }) {
-  const [open, setOpen] = useState(false)
+export function LinkRow({
+  link,
+  open,
+  onToggle,
+}: {
+  link: Link
+  open: boolean
+  onToggle: () => void
+}) {
   // Purely a request-in-flight flag for the button. Deliberately not used to
   // derive the row's state: the server owns that, so there's no way for this
   // to strand the row in a state the database disagrees with.
@@ -55,42 +62,66 @@ export function LinkRow({ link }: { link: Link }) {
     }
   }
 
-  // One quiet line of state, in the same slot the tag would occupy.
+  // One quiet line of state, in the same slot the tag would occupy. State
+  // stays plain text — a pill is a category, and "couldn't fetch details" is
+  // not one.
   const metaDetail = isPending ? (
     <span className={styles.pendingNote}>adding details</span>
   ) : hasFailed ? (
     <span className={styles.failedNote}>couldn&apos;t fetch details</span>
   ) : primaryTag ? (
-    <span className={isWatch ? styles.tagWatch : undefined}>{primaryTag}</span>
+    <span className={`${styles.tagPill} ${isWatch ? styles.tagWatch : ''}`}>{primaryTag}</span>
   ) : null
 
   return (
     <>
       <div className={styles.row}>
-        <a className={styles.rowLink} href={link.url} target="_blank" rel="noopener noreferrer">
-          {link.image_url ? (
+        {/* draggable={false} on every link and image in the row: a browser
+            starts its own native drag from an <a> or an <img>, and that drag
+            swallows the pointer before the swipe-to-archive gesture ever sees
+            it. Expanded rows appeared to work only because the panel is a
+            plain div with nothing native to steal. */}
+        <a
+          className={styles.rowLink}
+          href={link.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          draggable={false}
+        >
+          {link.image_url && link.image_kind === 'photo' ? (
             // Arbitrary scraped hosts, and these are 40px — next/image's
-            // optimizer would cost more than it saves here. A favicon is
-            // contained rather than cropped, or it renders stretched.
+            // optimizer would cost more than it saves here.
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              className={`${styles.thumb} ${link.image_kind === 'icon' ? styles.thumbIcon : ''}`}
+              className={styles.thumb}
               src={link.image_url}
               alt=""
               loading="lazy"
+              draggable={false}
             />
           ) : isPending ? (
             <div className={`${styles.thumb} ${styles.thumbPending}`} />
           ) : (
-            // Nothing scraped and no favicon: derive a tile so the row still
-            // reads as a row rather than a gap.
+            // No photo. A favicon shrunk into a 40px square reads as clutter
+            // at this size, so an `icon` image_url is deliberately ignored in
+            // favour of the derived tile — the row keeps a solid left edge
+            // and the letter identifies the site as well as the icon did.
             <div className={`${styles.thumb} ${styles.thumbGenerated}`} style={{ background: thumb.background }}>
               {thumb.monogram}
             </div>
           )}
           <div className={styles.content}>
             <div className={styles.titleLine}>
-              <span className={`${styles.title} ${placeholderTitle ? styles.pending : ''}`}>
+              {/* Scraped titles come in whatever script the page was written
+                  in. Without dir the browser lays a Hebrew or Arabic title out
+                  left-to-right and its punctuation lands at the wrong end;
+                  "auto" picks the direction from the string's own first strong
+                  character, per string, which is the only thing that can be
+                  right for a mixed list. */}
+              <span
+                dir="auto"
+                className={`${styles.title} ${placeholderTitle ? styles.pending : ''}`}
+              >
                 {displayTitle(link)}
               </span>
               {link.imdb_rating && (
@@ -101,13 +132,8 @@ export function LinkRow({ link }: { link: Link }) {
               )}
             </div>
             <div className={styles.meta}>
-              {link.domain}
-              {metaDetail && (
-                <>
-                  {' · '}
-                  {metaDetail}
-                </>
-              )}
+              <span className={styles.domain}>{link.domain}</span>
+              {metaDetail}
             </div>
           </div>
         </a>
@@ -120,6 +146,7 @@ export function LinkRow({ link }: { link: Link }) {
             target="_blank"
             rel="noopener noreferrer"
             aria-label="Share via WhatsApp"
+            draggable={false}
             onClick={(e) => e.stopPropagation()}
           >
             <WhatsAppIcon />
@@ -136,7 +163,7 @@ export function LinkRow({ link }: { link: Link }) {
             onClick={(e) => {
               e.stopPropagation()
               e.preventDefault()
-              setOpen((v) => !v)
+              onToggle()
             }}
           >
             <ChevronIcon />
@@ -163,9 +190,11 @@ export function LinkRow({ link }: { link: Link }) {
                   </button>
                 </div>
               )}
-              {link.description && <div>{link.description}</div>}
+              {link.description && <div dir="auto">{link.description}</div>}
               {link.note && (
-                <div className={link.description ? styles.note : undefined}>{link.note}</div>
+                <div dir="auto" className={link.description ? styles.note : undefined}>
+                  {link.note}
+                </div>
               )}
               {link.trailer_url && (
                 <a
@@ -173,6 +202,7 @@ export function LinkRow({ link }: { link: Link }) {
                   href={link.trailer_url}
                   target="_blank"
                   rel="noopener noreferrer"
+                  draggable={false}
                 >
                   Watch trailer
                 </a>

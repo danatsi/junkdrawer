@@ -17,8 +17,15 @@ import styles from './LinkRow.module.css'
  * the actual image needs the Web Share API, which opens the OS picker rather
  * than jumping straight into WhatsApp.
  */
-export function ScreenshotRow({ link }: { link: Link }) {
-  const [open, setOpen] = useState(false)
+export function ScreenshotRow({
+  link,
+  open,
+  onToggle,
+}: {
+  link: Link
+  open: boolean
+  onToggle: () => void
+}) {
   const [viewerOpen, setViewerOpen] = useState(false)
   const [shareError, setShareError] = useState<string | null>(null)
 
@@ -45,24 +52,26 @@ export function ScreenshotRow({ link }: { link: Link }) {
     }
   }
 
-  const toggle = () => setOpen((v) => !v)
-
   return (
     <>
-      <div className={`${styles.row} ${styles.rowClickable}`} onClick={toggle}>
+      <div className={`${styles.row} ${styles.rowClickable}`} onClick={onToggle}>
         <div className={styles.rowToggle}>
           {image ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img className={styles.thumb} src={image} alt="" loading="lazy" />
+            <img className={styles.thumb} src={image} alt="" loading="lazy" draggable={false} />
           ) : (
             <div className={styles.thumb} />
           )}
           <div className={styles.content}>
             <div className={styles.titleLine}>
-              <span className={styles.title}>{displayTitle(link)}</span>
+              {/* Same reason as LinkRow: a screenshot's title is whatever
+                  script its text was in. */}
+              <span dir="auto" className={styles.title}>
+                {displayTitle(link)}
+              </span>
             </div>
             <div className={styles.meta}>
-              <span className={styles.tagAccent}>screenshot</span>
+              <span className={`${styles.tagPill} ${styles.tagAccent}`}>screenshot</span>
             </div>
           </div>
         </div>
@@ -85,7 +94,7 @@ export function ScreenshotRow({ link }: { link: Link }) {
             aria-expanded={open}
             onClick={(e) => {
               e.stopPropagation()
-              toggle()
+              onToggle()
             }}
           >
             <ChevronIcon />
@@ -108,7 +117,7 @@ export function ScreenshotRow({ link }: { link: Link }) {
                 }}
               />
             )}
-            <div>
+            <div dir="auto">
               {link.description ?? link.note}
               {shareError && <div className={styles.note}>{shareError}</div>}
             </div>

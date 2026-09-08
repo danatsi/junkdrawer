@@ -1,33 +1,26 @@
 .row {
-  border-top: 0.5px solid var(--color-divider);
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  padding: 14px 20px;
+  padding: 11px 20px;
 }
 
 .rowLink {
   display: flex;
   flex: 1;
   min-width: 0;
-  gap: 12px;
+  gap: 13px;
   text-decoration: none;
   color: inherit;
 }
 
 .thumb {
-  width: 40px;
-  height: 40px;
-  border-radius: 6px;
+  width: 46px;
+  height: 46px;
+  border-radius: 9px;
   background: var(--color-thumb-placeholder);
   flex-shrink: 0;
   object-fit: cover;
-}
-
-.thumbIcon {
-  object-fit: contain;
-  padding: 7px;
-  background: var(--color-thumb-placeholder);
 }
 
 /* The floor of the fallback chain — a tile derived from the domain. */
@@ -35,7 +28,6 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: var(--font-serif);
   font-size: 16px;
   color: var(--color-text-secondary);
   opacity: 0.85;
@@ -54,8 +46,18 @@
 }
 
 .title {
-  font-family: var(--font-serif);
-  font-size: 15px;
+  font-size: 15.5px;
+  font-weight: 500;
+  /* dir="auto" is doing its job on the ordering, but it also flips the
+     alignment, and a right-aligned RTL title drifts away from its thumbnail
+     while the meta line under it stays left. Pinning alignment keeps every
+     row sharing one left edge; the bidi ordering inside the line is
+     untouched. */
+  text-align: left;
+  /* Tightened a hair: at this size the default tracking reads loose, and Plex
+     sets both scripts on the same sidebearings so it tightens evenly. */
+  letter-spacing: -0.011em;
+  line-height: 1.3;
   color: var(--color-text-primary);
 }
 
@@ -92,7 +94,7 @@
 }
 
 .retry {
-  font-family: var(--font-sans);
+  font-family: var(--font);
   font-size: 13px;
   margin-top: 6px;
   padding: 0;
@@ -127,8 +129,8 @@
 }
 
 .score {
-  background: var(--color-accent-bg);
-  color: var(--color-accent);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
   font-size: 11px;
   font-weight: 500;
   padding: 2px 7px;
@@ -139,13 +141,37 @@
 }
 
 .meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12px;
   color: var(--color-text-secondary);
-  margin-top: 2px;
+  margin-top: 3px;
+  min-width: 0;
 }
 
+.domain {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The tag is a shape, not a word after a dot: it says "this is a category"
+   without spending a separator glyph on saying it. */
+.tagPill {
+  flex: none;
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font-size: 10.5px;
+  line-height: 1.5;
+  padding: 1.5px 6px;
+  border-radius: 5px;
+}
+
+/* Watch rows already carry a score badge; the brighter tag is the second half
+   of that signal, and the only tag that gets one. */
 .tagWatch {
-  color: var(--color-accent);
+  color: var(--color-text-primary);
 }
 
 .actions {
@@ -199,7 +225,7 @@
 }
 
 .panelInner {
-  padding: 10px 0 14px 52px;
+  padding: 10px 0 14px 59px;
   font-size: 13px;
   color: var(--color-text-secondary);
   line-height: 1.6;
@@ -241,7 +267,7 @@
 }
 
 .tagAccent {
-  color: var(--color-accent);
+  color: var(--color-text-primary);
 }
 
 .panelWithThumb {
@@ -253,7 +279,7 @@
 .panelThumb {
   width: 56px;
   height: 56px;
-  border-radius: 8px;
+  border-radius: 10px;
   flex-shrink: 0;
   cursor: pointer;
   object-fit: cover;

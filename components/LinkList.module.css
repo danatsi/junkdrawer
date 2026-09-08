@@ -9,9 +9,9 @@
 }
 
 .wordmark {
-  font-family: var(--font-serif);
   font-size: 20px;
-  font-weight: 500;
+  font-weight: 600;
+  letter-spacing: -0.02em;
   margin: 0 0 16px;
 }
 
@@ -23,21 +23,23 @@
 }
 
 .chip {
-  font-family: var(--font-sans);
-  font-size: 12px;
-  padding: 4px 12px;
-  border-radius: 20px;
+  font-family: var(--font);
+  font-size: 12.5px;
+  padding: 5px 11px;
+  /* Squared off rather than a pill: the thumbnails and the tag chips share
+     this radius family, so the chrome reads as one set of shapes. */
+  border-radius: 8px;
   white-space: nowrap;
   cursor: pointer;
-  border: 0.5px solid var(--color-divider);
-  background: transparent;
+  border: none;
+  background: var(--color-surface);
   color: var(--color-text-secondary);
 }
 
 .chipActive {
   background: var(--color-accent);
   color: var(--color-accent-bg);
-  border-color: transparent;
+  font-weight: 500;
 }
 
 .empty {
@@ -45,7 +47,6 @@
   font-size: 13px;
   color: var(--color-text-secondary);
   line-height: 1.6;
-  border-top: 0.5px solid var(--color-divider);
 }
 
 .headerTop {
@@ -64,6 +65,25 @@
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+/* Right-aligned to the same edge as the section rows, so it reads as
+   belonging to them rather than to the header above. */
+.listActions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 20px 6px;
+}
+
+.collapseAll {
+  font-family: var(--font);
+  font-size: 12px;
+  padding: 0 2px;
+  border: none;
+  background: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
 }
 
 .searchToggle {
@@ -85,7 +105,7 @@
 .searchField {
   flex: 1;
   min-width: 0;
-  font-family: var(--font-sans);
+  font-family: var(--font);
   font-size: 13px;
   color: var(--color-text-primary);
   background: transparent;
@@ -104,18 +124,18 @@
   opacity: 0.7;
 }
 
-/* Section headers sit in the rows' own 20px gutter and carry the same divider,
-   so grouping reads as breaks in one list rather than a stack of cards. */
+/* Section headers sit in the rows' own 20px gutter, so grouping reads as
+   breaks in one list rather than a stack of cards. The break is the space
+   above them; there is no rule to draw it. */
 .sectionHeader {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 14px 20px 6px;
+  gap: 7px;
+  padding: 18px 20px 7px;
   border: none;
-  border-top: 0.5px solid var(--color-divider);
   background: transparent;
-  font-family: var(--font-sans);
+  font-family: var(--font);
   text-align: left;
   cursor: pointer;
   /* Secondary, not accent: the accent is reserved for status (spec §4.1), and
@@ -128,15 +148,17 @@
   cursor: default;
 }
 
+/* Sentence case at reading size. A tracked-out caps label is louder than the
+   rows it introduces, which is backwards — the section name is the least
+   important text on the screen. */
 .sectionName {
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: 12.5px;
+  font-weight: 500;
 }
 
 .sectionCount {
   font-size: 11px;
-  opacity: 0.7;
+  opacity: 0.55;
 }
 
 .sectionChevron {

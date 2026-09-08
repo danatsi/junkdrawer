@@ -23,10 +23,21 @@ export function SwipeableRow({
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const x = useMotionValue(0)
+  // Whether the pointer actually travelled during this gesture. The row body
+  // is a link, so the release at the end of a swipe lands as a click and opens
+  // it — archiving the row and navigating away in the same motion. Nothing
+  // upstream suppresses that, so the gesture has to say whether it was a drag
+  // or a tap and the click has to be caught before it reaches the anchor.
+  const draggedRef = useRef(false)
 
   // The archive backdrop stays hidden until the drag actually starts, so it
   // never flashes behind a stationary row.
   const backdropOpacity = useTransform(x, [-80, -8, 0], [1, 0.5, 0])
+
+  /** Past a few pixels it is a swipe, not a tap with a shaky thumb. */
+  function handleDrag(_: unknown, info: PanInfo) {
+    if (Math.abs(info.offset.x) > 4) draggedRef.current = true
+  }
 
   function handleDragEnd(_: unknown, info: PanInfo) {
     const width = containerRef.current?.offsetWidth ?? 0
@@ -45,7 +56,23 @@ export function SwipeableRow({
   }
 
   return (
-    <div className={styles.container} ref={containerRef}>
+    <div
+      className={styles.container}
+      ref={containerRef}
+      // Capture phase: the anchor is a descendant, so this is the only place
+      // the click can be stopped before it navigates.
+      onClickCapture={(e) => {
+        if (!draggedRef.current) return
+        e.preventDefault()
+        e.stopPropagation()
+        draggedRef.current = false
+      }}
+      // A gesture that never moves must leave the flag clear, or the tap after
+      // a swipe would be swallowed too.
+      onPointerDownCapture={() => {
+        draggedRef.current = false
+      }}
+    >
       <motion.div className={styles.backdrop} style={{ opacity: backdropOpacity }} aria-hidden="true">
         Archive
       </motion.div>
@@ -58,6 +85,7 @@ export function SwipeableRow({
         dragConstraints={{ left: -10_000, right: 0 }}
         dragElastic={{ left: 1, right: 0 }}
         dragMomentum={false}
+        onDrag={handleDrag}
         onDragEnd={handleDragEnd}
       >
         {children}

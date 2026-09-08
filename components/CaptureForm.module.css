@@ -10,7 +10,7 @@
 }
 
 .wordmark {
-  font-family: var(--font-serif);
+  font-family: var(--font);
   font-size: 20px;
   font-weight: 500;
   margin: 0 0 6px;
@@ -38,7 +38,7 @@
 }
 
 .input {
-  font-family: var(--font-sans);
+  font-family: var(--font);
   font-size: 14px;
   color: var(--color-text-primary);
   background: transparent;
@@ -60,7 +60,7 @@
 }
 
 .submit {
-  font-family: var(--font-sans);
+  font-family: var(--font);
   font-size: 14px;
   padding: 11px;
   border: none;
@@ -98,7 +98,7 @@
 }
 
 .file {
-  font-family: var(--font-sans);
+  font-family: var(--font);
   font-size: 13px;
   color: var(--color-text-secondary);
   margin-bottom: 18px;
@@ -126,7 +126,7 @@
 }
 
 .clear {
-  font-family: var(--font-sans);
+  font-family: var(--font);
   font-size: 12px;
   padding: 0;
   border: none;

@@ -109,6 +109,10 @@ export function LinkList({ links }: { links: Link[] }) {
   // position without having to remember an index.
   const [archivedIds, setArchivedIds] = useState<ReadonlySet<string>>(new Set())
   const [archived, setArchived] = useState<Link | null>(null)
+  // Which panels are open. Lifted out of the rows so several can be open at
+  // once (the spec §6 q5 decision) *and* something above them can close them
+  // all — a row owning its own boolean can do the first but not the second.
+  const [openIds, setOpenIds] = useState<ReadonlySet<string>>(new Set())
   // Collapsed rather than expanded ids: the default is open, so an empty set
   // is the default state and a new category doesn't arrive collapsed.
   const [collapsedSections, setCollapsedSections] = useState<ReadonlySet<string>>(new Set())
@@ -186,6 +190,14 @@ export function LinkList({ links }: { links: Link[] }) {
     })
   }, [])
 
+  const toggleOpen = useCallback((id: string) => {
+    setOpenIds((current) => {
+      const next = new Set(current)
+      if (!next.delete(id)) next.add(id)
+      return next
+    })
+  }, [])
+
   function closeSearch() {
     setSearchOpen(false)
     setQuery('')
@@ -201,9 +213,53 @@ export function LinkList({ links }: { links: Link[] }) {
 
   const renderRow = (link: Link) => (
     <SwipeableRow key={link.id} onArchive={() => archive(link)}>
-      {link.type === 'screenshot' ? <ScreenshotRow link={link} /> : <LinkRow link={link} />}
+      {link.type === 'screenshot' ? (
+        <ScreenshotRow
+          link={link}
+          open={openIds.has(link.id)}
+          onToggle={() => toggleOpen(link.id)}
+        />
+      ) : (
+        <LinkRow link={link} open={openIds.has(link.id)} onToggle={() => toggleOpen(link.id)} />
+      )}
     </SwipeableRow>
   )
+
+  // The render below unmounts a collapsed section's rows, and a query
+  // overrides the collapse state so a hit can't hide inside a shut section.
+  // Shared with it so the two can't drift.
+  const isSectionCollapsed = (section: Section) =>
+    !section.pinned && !trimmedQuery && collapsedSections.has(section.key)
+
+  // Sections only exist on the all tab, and a search forces them all open, so
+  // there's nothing to collapse in either of those cases.
+  const collapsibleKeys = trimmedQuery
+    ? []
+    : (sections ?? []).filter((section) => !section.pinned).map((section) => section.key)
+  // Only rows actually on screen. A panel left open inside a section that was
+  // then collapsed is unmounted, and counting it kept the button reading
+  // "Collapse all" once everything visible was already shut — a click that
+  // closed something nobody could see and appeared to do nothing.
+  const onScreen = sections
+    ? sections.filter((section) => !isSectionCollapsed(section)).flatMap((section) => section.links)
+    : visible
+  const canCollapse =
+    collapsibleKeys.some((key) => !collapsedSections.has(key)) ||
+    onScreen.some((link) => openIds.has(link.id))
+
+  // One control for both, because "collapse all" leaving a row's panel hanging
+  // open would read as a bug rather than a distinction.
+  function collapseAll() {
+    setCollapsedSections(new Set(collapsibleKeys))
+    setOpenIds(new Set())
+  }
+
+  // Sections only. Row panels are closed by default and hold a paragraph each,
+  // so throwing every one of them open is not what "expand all" is asking for —
+  // it means put the list back the way it starts.
+  function expandAll() {
+    setCollapsedSections(new Set())
+  }
 
   return (
     <main className={styles.screen}>
@@ -265,15 +321,29 @@ export function LinkList({ links }: { links: Link[] }) {
         )}
       </div>
 
+      {/* Sits above the sections rather than in the header: it acts on the
+          list, not the app. Tied to the sections existing rather than to
+          there being something to close, so it holds its place instead of
+          shoving the list down the moment a panel opens, and so it can still
+          be found once everything is shut. A search forces every section
+          open, which leaves it nothing to do. */}
+      {collapsibleKeys.length > 0 && (
+        <div className={styles.listActions}>
+          <button
+            type="button"
+            className={styles.collapseAll}
+            onClick={canCollapse ? collapseAll : expandAll}
+          >
+            {canCollapse ? 'Collapse all' : 'Expand all'}
+          </button>
+        </div>
+      )}
+
       {visible.length === 0 ? (
         <p className={styles.empty}>{emptyMessage(links.length, trimmedQuery, activeTag)}</p>
       ) : sections ? (
         sections.map((section) => {
-          // A collapsed section would hide search hits, so a query overrides
-          // the collapse state rather than the user having to reopen sections
-          // to find out where their match is.
-          const collapsed =
-            !section.pinned && !trimmedQuery && collapsedSections.has(section.key)
+          const collapsed = isSectionCollapsed(section)
           const bodyId = `section-${section.key}`
 
           return (
@@ -329,7 +399,7 @@ function sectionLabel(section: Section) {
   return (
     <>
       <span className={styles.sectionName}>{section.label}</span>
-      <span className={styles.sectionCount}>{`· ${section.links.length}`}</span>
+      <span className={styles.sectionCount}>{section.links.length}</span>
     </>
   )
 }

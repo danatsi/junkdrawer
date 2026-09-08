@@ -23,3 +23,12 @@
   background: var(--color-bg);
   touch-action: pan-y;
 }
+
+/* The other half of the draggable={false} fix in LinkRow. Safari has a long
+   history of starting a native drag from a link or an image regardless of the
+   attribute, and that drag eats the swipe. Belt and braces, because the
+   failure is silent: the row simply refuses to move. */
+.sheet a,
+.sheet img {
+  -webkit-user-drag: none;
+}
