@@ -34,18 +34,64 @@ input **URLs and Safari web pages**.
 3. **Run JavaScript on Web Page** — this is the step that beats bot blocking.
    It runs in the page you're looking at, with your session and your IP.
 
+   Picking "the biggest image on the page" is not good enough on a real
+   product page: the largest thing is often a "you may also like" tile, and
+   the item photo is frequently advertised only in `srcset` while `src` holds
+   a thumbnail. So this scores the biggest source each image *offers*, ignores
+   page chrome and recommendation strips, and looks inside the product region
+   before falling back to the whole document.
+
    ```javascript
-   // Best available product image, largest first, ignoring sprites and logos.
+   const BAD = /logo|sprite|icon|placeholder|badge|flag|payment|swatch/i;
+   const NOISE = /recommend|related|you-?may|also-?like|complete-?the|carousel|slider|footer|header|\bnav\b|cart|banner|cookie/i;
+
+   const labelOf = el => (typeof el.className === 'string' ? el.className : '') + ' ' + (el.id || '');
+   const inNoise = img => {
+     for (let el = img; el && el !== document.body; el = el.parentElement) {
+       if (NOISE.test(labelOf(el))) return true;
+     }
+     return false;
+   };
+   // Largest width the srcset advertises, which src often undersells.
+   const srcsetMax = img => {
+     const set = img.getAttribute('srcset');
+     if (!set) return { width: 0, url: '' };
+     const best = set.split(',').map(p => p.trim().split(/\s+/))
+       .map(([u, d]) => ({ url: u, width: parseInt(d, 10) || 0 }))
+       .sort((a, b) => b.width - a.width)[0];
+     return best && best.url ? best : { width: 0, url: '' };
+   };
+   const area = img => {
+     const nw = img.naturalWidth, nh = img.naturalHeight, sw = srcsetMax(img).width;
+     return sw > nw && nw > 0 ? sw * (sw * nh / nw) : nw * nh;
+   };
+   // A banner is wide and short; a product photo isn't.
+   const proportionate = img => {
+     const nw = img.naturalWidth, nh = img.naturalHeight;
+     if (!nw || !nh) return false;
+     return (nw > nh ? nw / nh : nh / nw) <= 3;
+   };
+   const widest = img => {
+     const best = srcsetMax(img);
+     return best.width > img.naturalWidth && best.url
+       ? new URL(best.url, location.href).href
+       : (img.currentSrc || img.src);
+   };
+   const pick = root => [...root.querySelectorAll('img')]
+     .filter(i => !BAD.test(i.src) && !inNoise(i))
+     .filter(i => proportionate(i) && area(i) > 200 * 200)
+     .sort((a, b) => area(b) - area(a))[0];
+
    const meta = document.querySelector('meta[property="og:image"]')?.content;
-   let best = meta && !/logo|sprite|placeholder/i.test(meta) ? meta : null;
+   let best = meta && !BAD.test(meta) ? meta : null;
    if (!best) {
-     const imgs = [...document.images]
-       .filter(i => i.naturalWidth > 200 && i.naturalHeight > 200)
-       .filter(i => !/logo|sprite|icon|placeholder/i.test(i.src))
-       .sort((a, b) => b.naturalWidth * b.naturalHeight - a.naturalWidth * a.naturalHeight);
-     best = imgs[0]?.src ?? null;
+     const main = document.querySelector('[itemtype*="Product" i]')
+       || document.querySelector('main, #main, [role=main]')
+       || document;
+     const img = pick(main) || pick(document);
+     best = img ? widest(img) : null;
    }
-   completion(best || "");
+   completion(best ? new URL(best, location.href).href : "");
    ```
 
    **Set Variable** `imageUrl`.
@@ -69,17 +115,36 @@ input **URLs and Safari web pages**.
 
 ## Your token
 
-```
-73ca4e669f0ef26d57afa12c4a474afa14fae94eeee770fef53d8d17cab9062c
+Read it out of `.env.local`, which is gitignored:
+
+```bash
+grep '^CAPTURE_TOKEN=' .env.local | cut -d= -f2
 ```
 
-Same value as `CAPTURE_TOKEN` in `.env.local`. Rotate it there and here together.
+Paste that into the Shortcut's `Authorization` header, and set the same value
+as `CAPTURE_TOKEN` in the deployment's environment variables.
+
+**Never write the value into this file.** It used to live here in plaintext,
+and this repo is public — so that token is burned and has been rotated. A
+secret in a committed doc is a secret published. To rotate: generate a new
+value, update `.env.local` and the deployment together, then re-paste it into
+the Shortcut.
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
 
 ## Checking it works
 
+Three tests, increasing in fidelity. Each isolates a different half, so run
+them in order — a failure at the phone stage means something different
+depending on whether the server stage passed.
+
+### 1. The server half, no phone needed
+
 ```bash
-curl -X POST https://<your-app>/api/capture \
-  -H "Authorization: Bearer $CAPTURE_TOKEN" \
+curl -X POST http://localhost:3000/api/capture \
+  -H "Authorization: Bearer $(grep '^CAPTURE_TOKEN=' .env.local | cut -d= -f2)" \
   -F "url=https://example.com/thing" \
   -F "note=testing" \
   -F "image=@photo.jpg;type=image/jpeg"
@@ -87,6 +152,34 @@ curl -X POST https://<your-app>/api/capture \
 
 Expect `201 {"id":"…","saved":true}` in well under a second. Enrichment runs
 afterwards, so the row appears immediately and fills in a few seconds later.
+
+Then check the row stored a reference rather than a URL: `image_kind` should be
+`photo` and `image_url` should begin `storage:items/`. Anything starting
+`https://` means the image is being hot-linked, which is the thing
+`lib/enrich.ts` is written to avoid.
+
+### 2. The JavaScript step alone, on the phone
+
+The highest-value test, because this is both the part that beats bot-blocking
+and the part most likely to pick the wrong photo. Temporarily add a **Quick
+Look** of `imageUrl` immediately after the Run JavaScript step, share a real
+product page from Safari, and look at what it extracted *before* anything is
+posted. Remove the Quick Look when you're done.
+
+Worth doing on a few different retailers — the failure mode isn't an error, it's
+a plausible-looking photo of the wrong thing.
+
+### 3. The whole path
+
+Quick Look removed, share from Safari, watch the row appear in the list and
+fill in. That's the feature working.
+
+**Testing the extraction from a laptop doesn't substitute for step 2.** Zara
+answers `Access Denied` to a real desktop Chrome from a home or office IP, let
+alone a datacentre one — which is the entire reason this runs on your phone.
+You can develop the selector logic against pages that *do* load (`agent-browser
+open <url>` then `agent-browser eval`), but only the phone tells you about the
+sites that matter.
 
 ## Notes
 

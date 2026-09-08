@@ -1,5 +1,6 @@
 import 'server-only'
 import { getSupabase } from './supabase'
+import { fetchFirstImage } from './fetch-image'
 
 /**
  * Favicons as fallback thumbnails.
@@ -20,8 +21,6 @@ const BUCKET = 'icons'
  *  and this avoids signing a URL on every render. */
 const PUBLIC_PREFIX = '/storage/v1/object/public'
 
-const TIMEOUT_MS = 5_000
-
 /** Anything larger isn't a favicon. Guards against a redirect to a real page. */
 const MAX_BYTES = 200 * 1024
 
@@ -38,14 +37,17 @@ export async function ensureFavicon(
   // re-uploading the same icon for every row from the same shop.
   if (await exists(objectPath)) return cached
 
-  const icon = await fetchFirstWorking([
-    declaredHref,
-    `https://${domain}/favicon.ico`,
-    // Last resort. Only reached when the site declared nothing and has no
-    // favicon at its conventional path, and it still never touches the
-    // browser — this call is made from the server.
-    `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128`,
-  ])
+  const icon = await fetchFirstImage(
+    [
+      declaredHref,
+      `https://${domain}/favicon.ico`,
+      // Last resort. Only reached when the site declared nothing and has no
+      // favicon at its conventional path, and it still never touches the
+      // browser — this call is made from the server.
+      `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128`,
+    ],
+    MAX_BYTES,
+  )
   if (!icon) return null
 
   const { error } = await getSupabase()
@@ -64,33 +66,6 @@ async function exists(objectPath: string): Promise<boolean> {
     .storage.from(BUCKET)
     .list('', { search: objectPath, limit: 1 })
   return Boolean(data?.some((entry) => entry.name === objectPath))
-}
-
-async function fetchFirstWorking(
-  candidates: (string | undefined)[],
-): Promise<{ body: ArrayBuffer; contentType: string } | null> {
-  for (const url of candidates) {
-    if (!url) continue
-    try {
-      const response = await fetch(url, {
-        signal: AbortSignal.timeout(TIMEOUT_MS),
-        redirect: 'follow',
-      })
-      if (!response.ok) continue
-
-      const contentType = response.headers.get('content-type') ?? ''
-      // A bot-blocked site will happily return an HTML page from /favicon.ico.
-      if (!contentType.startsWith('image/')) continue
-
-      const body = await response.arrayBuffer()
-      if (body.byteLength === 0 || body.byteLength > MAX_BYTES) continue
-
-      return { body, contentType }
-    } catch {
-      // Timeout, DNS, TLS — just try the next candidate.
-    }
-  }
-  return null
 }
 
 function publicUrl(objectPath: string): string {

@@ -36,14 +36,22 @@ export function parseStorageRef(value: string | null): { bucket: Bucket; path: s
   return { bucket: rest.slice(0, slash) as Bucket, path: rest.slice(slash + 1) }
 }
 
+/**
+ * @param upsert Overwrite an object that's already at `objectPath`. Off by
+ *   default, because a randomly-named upload colliding means something is
+ *   wrong and should surface. On for content-addressed paths, where the same
+ *   name genuinely is the same image and re-enriching a row would otherwise
+ *   fail or leave a duplicate behind.
+ */
 export async function uploadImage(
   bucket: Bucket,
   objectPath: string,
   file: Blob,
+  { upsert = false }: { upsert?: boolean } = {},
 ): Promise<string> {
   const { error } = await getSupabase()
     .storage.from(bucket)
-    .upload(objectPath, file, { contentType: file.type || 'image/webp', upsert: false })
+    .upload(objectPath, file, { contentType: file.type || 'image/webp', upsert })
   if (error) throw new Error(`${bucket} upload failed: ${error.message}`)
   return storageRef(bucket, objectPath)
 }
