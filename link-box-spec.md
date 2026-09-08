@@ -99,26 +99,57 @@ Opens WhatsApp (native app or web) with that text pre-filled in the share/contac
 
 ### 4.1 Visual direction
 
-Warm neutrals, editorial mood. Content-first: the link's title is the star, everything else is quiet.
+Ink. A dark, neutral tray in which the thumbnails are the only colour. The content is
+other people's images, scraped from everywhere, so anything the interface tints competes
+with them — the app's job is to be the quietest thing on the screen.
+
+This replaced a warm-cream, serif-titled, terracotta-accented treatment. That combination
+is the single most recognisable "generated design" signature there is, and it read as
+templated rather than considered. Three of its habits went with it, and should not come
+back: tracked-out ALL-CAPS section labels, meta strings joined with middle dots, and a
+hairline rule under every row.
 
 **Color tokens:**
 | Token | Value | Use |
 |---|---|---|
-| Background | `#F1ECE2` | page background (warm paper) |
-| Text primary | `#2A241C` | titles |
-| Text secondary | `#6B5F4F` | meta, descriptions, icons |
-| Divider | `#DDD3C2` | hairline row dividers |
-| Accent | `#9C5A22` | reserved for status only — score badges, watch tag color, active filter chip |
-| Accent background | `#F8F0E4` | fill behind accent badges (e.g. IMDb score chip) |
-| Thumbnail placeholder | `#E4DBC9` | |
+| Background | `#16171A` | page background |
+| Surface | `#232428` | raised chrome — chips, tag pills, score badges, thumbnail placeholder |
+| Text primary | `#ECECEE` | titles |
+| Text secondary | `#8A8B93` | meta, descriptions, icons |
+| Divider | `#232428` | retained for the few edges that still need one; rows no longer use it |
+| Accent | `#ECECEE` | not a hue — the ink inverted. Active chip, score, the one tappable link in a panel |
+| Accent background | `#16171A` | what sits on top of accent |
+| Thumbnail placeholder | `#232428` | |
+
+There is deliberately no accent *hue*. On a dark ground, full-contrast ink does the job a
+coloured accent does on a light one, and it leaves the thumbnails as the only saturated
+thing in the list.
 
 **Typography:**
-- Serif (Lora or Source Serif) for link titles — the editorial voice, read first.
-- Sans (Inter) for everything else — domain, tags, timestamps, notes, UI chrome.
+- One family, IBM Plex Sans Hebrew, for everything. Hierarchy comes from weight and size,
+  not from a second face.
+- One family because the list is bilingual. Pairing a Latin family with a Hebrew one behind
+  it in the stack renders each script in a face designed for it, but the two never agree on
+  weight: Hebrew comes out visibly thinner than Latin at the same `font-weight`, and fixing
+  that needs a per-script weight, which no single CSS declaration can express. Plex draws
+  both scripts as one system, so a mixed title is one voice and `font-weight: 500` means the
+  same thing on either side of it.
+- A Hebrew serif was tried for titles (Frank Ruhl Libre) and rejected: at 15px it reads dark
+  and cramped, and Hebrew publishing doesn't lean on serifs at UI sizes the way Latin does.
+- Titles: 15.5px / 500, tracking -0.011em. Meta: 12px. Section names: 12.5px / 500, sentence
+  case.
+- Titles and body text carry `dir="auto"`, which takes the direction from the string's own
+  first strong character — per string, because the list is mixed. Alignment is pinned left
+  regardless, so an RTL title stays with its thumbnail instead of drifting to the far edge
+  while the meta line under it stays put; only the ordering inside the line flips.
 
 **Layout:**
 - Dense list rows, left-aligned. No card wrapper, no shadows, no rounded-card-grid treatment.
-- Hairline divider (`#DDD3C2`, 0.5px) between rows, not borders around each row.
+- Rows are separated by space, not by a rule. 46px thumbnails at 9px radius; chips and tag
+  pills share that radius family so the chrome reads as one set of shapes.
+- A row's tag is a pill rather than a word after a middle dot — the shape says "category"
+  without spending a separator glyph on saying it. Row *state* ("adding details", "couldn't
+  fetch details") stays plain text, because it isn't a category.
 - Filter bar: horizontal scrollable tag chips at the top (`all`, `shopping`, `watch`, `recipe`, ...). Active chip filled with the accent color; inactive chips are outlined/muted.
 
 ### 4.2 Row anatomy (collapsed — default state for every link type, including movies/TV)
@@ -135,7 +166,7 @@ Warm neutrals, editorial mood. Content-first: the link's title is the star, ever
 ### 4.3 Row interactions
 
 - **Tapping the row body** (thumbnail + title + meta area) opens the original URL directly — this is the primary action, since the whole point of the app is getting back to the link.
-- **Tapping the chevron** expands/collapses an inline panel below the row showing: the user's note (if any), and for `watch`-tagged links, the description and a trailer link. This does not navigate away. Only one row's panel should reasonably be open at a time in the real app (revisit if that's too restrictive).
+- **Tapping the chevron** expands/collapses an inline panel below the row showing: the user's note (if any), and for `watch`-tagged links, the description and a trailer link. This does not navigate away. Several panels may be open at once — auto-closing the last one turned comparing two rows into a memory game, and a panel is a short paragraph, so the cost of leaving them open is small. A "collapse all" control above the list is the way back (§4.6).
 - **Tapping the WhatsApp icon** builds and opens the wa.me share link for that row. Independent of the chevron and the row-body tap — none of the three should trigger each other (`stopPropagation` on both icon taps).
 - **Swipe-to-archive/remove** — flagged as the app's second signature gesture but not yet fully speced (see Open Questions). Needs a real gesture library (Framer Motion) in the actual build; a static mockup can't demonstrate it properly.
 
@@ -148,8 +179,29 @@ Warm neutrals, editorial mood. Content-first: the link's title is the star, ever
 ### 4.5 Content/copy guidelines
 
 - Sentence case everywhere, no ALL CAPS labels.
-- Titles are the LLM-generated clean title, not the raw page title.
+- Titles are the page's own title with the site chrome cut off ("… | Store Name"), so a
+  Hebrew page stays in Hebrew. The LLM only names a row when the scrape came back with
+  nothing usable — a blocked site, a bot interstitial, or a bare site name.
 - Tag chip labels are lowercase single words (`shopping`, `watch`, `recipe`).
+
+### 4.6 Sections and the collapse-all control
+
+On the `all` tab the list is grouped into collapsible sections, one per core tag, plus
+"everything else". Rows still enriching get a pinned section on top that does not collapse —
+it empties itself as enrichment finishes, and the row you just shared is the worst one to
+bury at the bottom.
+
+- A single right-aligned text button sits above the sections and reads **Collapse all**, or
+  **Expand all** once there is nothing left open. It closes every collapsible section *and*
+  every open row panel, because collapsing the list and leaving a panel hanging open would
+  read as a bug rather than a distinction.
+- Expand all restores the sections only. Row panels are closed by default and hold a
+  paragraph each, so throwing all of them open is not what it is asking for — it means put
+  the list back the way it starts.
+- The control is tied to the sections existing, not to there being something to close, so it
+  holds its place instead of shoving the list down the moment a panel opens.
+- A search forces every section open, so a hit cannot hide inside a shut one; that leaves the
+  control nothing to do and it is not shown.
 
 ---
 
@@ -213,10 +265,9 @@ One iOS-specific quirk: passing a non-empty `title` alongside `files` has been r
 2. **Swipe-to-archive/remove**: full interaction spec — swipe direction, reveal threshold, whether it's destructive-immediate or shows an undo toast.
 3. **Empty state**: copy and visual treatment when the list has no links yet, or a filter returns nothing.
 4. **Search behavior**: not yet designed — how search should match (title/domain/tags/note) and where the search field lives in the layout.
-5. **Multiple rows expanded at once**: whether opening one row's panel should auto-close others (as prototyped) or allow several open simultaneously.
-6. **PWA vs. plain bookmarked site**: whether the frontend should be a proper installable PWA (home screen icon) or just a bookmarked page — affects manifest/service worker setup.
-7. **Screenshot share icon**: WhatsApp-branded or generic share icon (see 5.6).
-8. **Gemini fallback for non-text screenshots**: not yet designed — what happens when a screenshot has little/no extractable text (a plain photo rather than a text-heavy capture).
+5. **PWA vs. plain bookmarked site**: whether the frontend should be a proper installable PWA (home screen icon) or just a bookmarked page — affects manifest/service worker setup.
+6. **Screenshot share icon**: WhatsApp-branded or generic share icon (see 5.6).
+7. **Gemini fallback for non-text screenshots**: not yet designed — what happens when a screenshot has little/no extractable text (a plain photo rather than a text-heavy capture).
 
 ---
 
@@ -241,7 +292,17 @@ Not yet implemented in code (tracked in Open Questions above): swipe-to-archive,
 - Gemini Flash (free tier) for tagging/title/summary generation, using the user's note as primary signal when present. Confirmed free-tier quota is far beyond expected volume (~3 links + 1–2 screenshots/day).
 - TMDb + OMDb chained for movie/TV enrichment (description + trailer from TMDb, IMDb rating specifically from OMDb via TMDb's imdb_id).
 - WhatsApp share for links is a client-side `wa.me` link — no backend or API key involved. For screenshots, sharing the actual image requires the Web Share API instead (see 5.6) — a different mechanism, one extra tap, not unifiable with `wa.me`.
-- Visual direction: warm neutrals, editorial, serif titles + sans chrome, dense list rows (not cards/grid).
+- Visual direction: ink — dark neutral ground, one bilingual sans, no accent hue, dense list rows
+  (not cards/grid). Replaced a warm-cream/serif/terracotta treatment that read as templated.
 - All link types collapsed by default, including movies/TV — score badge is the only rest-state difference.
 - Row body opens the link; chevron expands details; WhatsApp is a direct button — no kebab/overflow menu anywhere in the row.
+- Row titles come from the page itself, not the model. The scrape's title with the site chrome cut off keeps a Hebrew page in Hebrew; Gemini only names a row when the scrape was unusable, and still owns tags and the summary either way.
+- One type family (IBM Plex Sans Hebrew) covers both scripts, so Hebrew and Latin match in weight by
+  construction rather than by tuning. Two-family stacks were tried twice and both times the scripts
+  disagreed on weight. Text carries `dir="auto"` for ordering, with alignment pinned left.
+- Swipe-to-archive sets `draggable={false}` on every link and image in a row and swallows the click
+  that follows a drag. Without the first the browser's native link drag eats the gesture; without the
+  second the release opens the link you just archived.
+- A stored favicon is never shown as a thumbnail. At 40px it reads as clutter, so those rows get the derived monogram tile and the list keeps one solid left edge.
+- Several row panels may be open at once, and one "collapse all" control closes them along with every section.
 - v2 (nice to have): screenshot saving, with its own storage strategy (compression + separate free image storage) and its own row interaction model (whole-row toggle instead of link-out, full-screen image viewer).
