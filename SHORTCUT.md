@@ -11,9 +11,13 @@ server can never see the item image. Your browser already has it.
 ## Endpoint
 
 ```
-POST https://<your-app>/api/capture
+POST https://junkdrawer-alpha.vercel.app/api/capture
 Authorization: Bearer <CAPTURE_TOKEN>
 ```
+
+`junkdrawer-alpha.vercel.app` is the stable production alias. Don't point the
+Shortcut at a `junkdrawer-<hash>-dt-9372.vercel.app` deployment URL — those are
+per-deploy and stop being current the next time you ship.
 
 Either `application/json` with `{ url, note }`, or `multipart/form-data` with
 `url`, `note` and `image`. Use multipart when there's a photo.
@@ -100,9 +104,16 @@ input **URLs and Safari web pages**.
    - **Get Contents of** `imageUrl` → **Set Variable** `photo`
    - **Resize Image** `photo` to **800** px wide (keeps the upload small; the
      server rejects anything over 5MB)
+   - **Convert Image** to **JPEG** → **Set Variable** `photo`
    - **End If**
 
-5. **Get Contents of** `https://<your-app>/api/capture`
+   The convert step is not optional. `ALLOWED_IMAGE_TYPES` in `lib/capture.ts`
+   is jpeg, png and webp only, and Resize Image keeps whatever format it was
+   handed — which on iOS is often HEIC. The failure is a `400 Unsupported image
+   type: image/heic`, which looks like an auth or endpoint problem until you
+   read the body.
+
+5. **Get Contents of** `https://junkdrawer-alpha.vercel.app/api/capture`
    - Method **POST**
    - Headers: `Authorization` = `Bearer <CAPTURE_TOKEN>`
    - Request Body **Form**:
@@ -150,6 +161,10 @@ curl -X POST http://localhost:3000/api/capture \
   -F "image=@photo.jpg;type=image/jpeg"
 ```
 
+Swap the host for `https://junkdrawer-alpha.vercel.app` to test the deployment
+the phone will actually talk to — worth doing after any env var change, since
+Vercel snapshots those at deploy time and a stale token only shows up as a 401.
+
 Expect `201 {"id":"…","saved":true}` in well under a second. Enrichment runs
 afterwards, so the row appears immediately and fills in a few seconds later.
 
@@ -187,4 +202,6 @@ sites that matter.
   Sharing a link from Messages skips step 3 and the row falls back to a favicon.
 - Step 3 will ask permission the first time.
 - No image is not a failure. The row still gets a title, summary and tags, and
-  falls back to the site's favicon, then to a generated tile.
+  falls back to a tile derived from the domain. A favicon is still fetched and
+  stored, but deliberately never rendered as a thumbnail — at 40px it reads as
+  clutter (see `LinkRow.tsx`), so the tile is what you'll actually see.
