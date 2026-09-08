@@ -3,6 +3,7 @@ import { after } from 'next/server'
 import { getSupabase, isSupabaseConfigured } from './supabase'
 import { enrich, enrichScreenshot } from './enrich'
 import { parseUrl, domainOf } from './url'
+import { parseClientPage } from './og'
 import { uploadImage } from './storage'
 
 /**
@@ -27,11 +28,17 @@ export type CaptureResult =
  *   interstitial, Amazon/Etsy/H&M/Argos return 403 — so the only reliable way
  *   to get a photo of the actual item is to take it from the page already
  *   rendered in your own browser, where there's nothing to block.
+ * @param rawPage Optional JSON blob of the page's own og: tags, read by the
+ *   Shortcut in that same browser. Cheaper than `image` for the same reason it
+ *   is better: it is four short strings rather than a photo, the phone does no
+ *   downloading or re-encoding, and the server fetches the picture itself from
+ *   a CDN that — unlike the page HTML — does not bot-block.
  */
 export async function saveLink(
   rawUrl: unknown,
   rawNote: unknown,
   image?: unknown,
+  rawPage?: unknown,
 ): Promise<CaptureResult> {
   const url = parseUrl(rawUrl)
   if (!url) {
@@ -89,7 +96,14 @@ export async function saveLink(
   // waitUntil, so this survives the function returning on Vercel.
   const id = data.id as string
   after(async () => {
-    await enrich({ id, url: href, note, domain, keepImage: Boolean(imageRef) })
+    await enrich({
+      id,
+      url: href,
+      note,
+      domain,
+      keepImage: Boolean(imageRef),
+      page: parseClientPage(rawPage, href),
+    })
   })
 
   return { ok: true, id }

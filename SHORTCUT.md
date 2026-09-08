@@ -38,91 +38,61 @@ input **URLs and Safari web pages**.
 3. **Run JavaScript on Web Page** — this is the step that beats bot blocking.
    It runs in the page you're looking at, with your session and your IP.
 
-   Picking "the biggest image on the page" is not good enough on a real
-   product page: the largest thing is often a "you may also like" tile, and
-   the item photo is frequently advertised only in `srcset` while `src` holds
-   a thumbnail. So this scores the biggest source each image *offers*, ignores
-   page chrome and recommendation strips, and looks inside the product region
-   before falling back to the whole document.
+   ⚠️ Set its **input** to *Shortcut Input* explicitly. It defaults to the
+   previous action's output, which is `note` — it would run against a string
+   instead of the page and return empty with no error.
+
+   It reads the four meta tags the page already declares and hands them over
+   as text. It does not try to *pick* an image — an earlier version scored
+   every `<img>` on the page by area, srcset width and aspect ratio while
+   dodging "you may also like" strips, and that was fifty lines of heuristic
+   living in a phone GUI, untestable except by sharing pages on a phone, whose
+   failure mode was a plausible photo of the wrong thing. The page already
+   says which image is the item's. Believe it.
 
    ```javascript
-   const BAD = /logo|sprite|icon|placeholder|badge|flag|payment|swatch/i;
-   const NOISE = /recommend|related|you-?may|also-?like|complete-?the|carousel|slider|footer|header|\bnav\b|cart|banner|cookie/i;
-
-   const labelOf = el => (typeof el.className === 'string' ? el.className : '') + ' ' + (el.id || '');
-   const inNoise = img => {
-     for (let el = img; el && el !== document.body; el = el.parentElement) {
-       if (NOISE.test(labelOf(el))) return true;
-     }
-     return false;
-   };
-   // Largest width the srcset advertises, which src often undersells.
-   const srcsetMax = img => {
-     const set = img.getAttribute('srcset');
-     if (!set) return { width: 0, url: '' };
-     const best = set.split(',').map(p => p.trim().split(/\s+/))
-       .map(([u, d]) => ({ url: u, width: parseInt(d, 10) || 0 }))
-       .sort((a, b) => b.width - a.width)[0];
-     return best && best.url ? best : { width: 0, url: '' };
-   };
-   const area = img => {
-     const nw = img.naturalWidth, nh = img.naturalHeight, sw = srcsetMax(img).width;
-     return sw > nw && nw > 0 ? sw * (sw * nh / nw) : nw * nh;
-   };
-   // A banner is wide and short; a product photo isn't.
-   const proportionate = img => {
-     const nw = img.naturalWidth, nh = img.naturalHeight;
-     if (!nw || !nh) return false;
-     return (nw > nh ? nw / nh : nh / nw) <= 3;
-   };
-   const widest = img => {
-     const best = srcsetMax(img);
-     return best.width > img.naturalWidth && best.url
-       ? new URL(best.url, location.href).href
-       : (img.currentSrc || img.src);
-   };
-   const pick = root => [...root.querySelectorAll('img')]
-     .filter(i => !BAD.test(i.src) && !inNoise(i))
-     .filter(i => proportionate(i) && area(i) > 200 * 200)
-     .sort((a, b) => area(b) - area(a))[0];
-
-   const meta = document.querySelector('meta[property="og:image"]')?.content;
-   let best = meta && !BAD.test(meta) ? meta : null;
-   if (!best) {
-     const main = document.querySelector('[itemtype*="Product" i]')
-       || document.querySelector('main, #main, [role=main]')
-       || document;
-     const img = pick(main) || pick(document);
-     best = img ? widest(img) : null;
-   }
-   completion(best ? new URL(best, location.href).href : "");
+   const m = p => document.querySelector(`meta[property="${p}"]`)?.content || "";
+   completion(JSON.stringify({
+     title: m("og:title"),
+     description: m("og:description"),
+     image: m("og:image"),
+     site: m("og:site_name"),
+   }));
    ```
 
-   **Set Variable** `imageUrl`.
+   **Set Variable** `page`.
 
-4. **If** `imageUrl` *has any value*
-   - **Get Contents of** `imageUrl` → **Set Variable** `photo`
-   - **Resize Image** `photo` to **800** px wide (keeps the upload small; the
-     server rejects anything over 5MB)
-   - **Convert Image** to **JPEG** → **Set Variable** `photo`
-   - **End If**
-
-   The convert step is not optional. `ALLOWED_IMAGE_TYPES` in `lib/capture.ts`
-   is jpeg, png and webp only, and Resize Image keeps whatever format it was
-   handed — which on iOS is often HEIC. The failure is a `400 Unsupported image
-   type: image/heic`, which looks like an auth or endpoint problem until you
-   read the body.
-
-5. **Get Contents of** `https://junkdrawer-alpha.vercel.app/api/capture`
+4. **Get Contents of** `https://junkdrawer-alpha.vercel.app/api/capture`
    - Method **POST**
    - Headers: `Authorization` = `Bearer <CAPTURE_TOKEN>`
    - Request Body **Form**:
      - `url` → *Shortcut Input* (as URL)
      - `note` → `note`
-     - `image` → the resized `photo` *(omit this field when there's no image —
-       the endpoint accepts plain JSON too)*
+     - `page` → `page`
 
-6. Optional: **Show Notification** "Saved" so the share sheet confirms.
+5. Optional: **Show Notification** "Saved" so the share sheet confirms.
+
+There is no image step. The phone sends the image *URL* inside `page` and the
+server fetches the picture itself, which is why there is nothing here to
+download, resize or convert — and no `400 Unsupported image type: image/heic`
+waiting for you, since `ALLOWED_IMAGE_TYPES` never sees an iOS photo.
+
+Retailers bot-block their page HTML and not their image CDNs. Measured from
+one machine, same UA for both columns:
+
+| | page HTML | image CDN |
+|---|---|---|
+| etsy | 403 | 404 |
+| hm | 403 | 410 |
+| amazon | 200 | 200 |
+
+The 404 and 410 are invented paths — the point is that the CDN *answered*
+rather than serving an interstitial. So a URL the phone read off the page is
+enough; the bytes do not have to make the trip.
+
+The `image` form field still exists and still takes a file, for the screenshot
+path and for anything that needs to push actual pixels. It just isn't how link
+capture works any more.
 
 ## Your token
 
@@ -175,14 +145,16 @@ Then check the row stored a reference rather than a URL: `image_kind` should be
 
 ### 2. The JavaScript step alone, on the phone
 
-The highest-value test, because this is both the part that beats bot-blocking
-and the part most likely to pick the wrong photo. Temporarily add a **Quick
-Look** of `imageUrl` immediately after the Run JavaScript step, share a real
-product page from Safari, and look at what it extracted *before* anything is
-posted. Remove the Quick Look when you're done.
+The highest-value test, because it is the part that beats bot-blocking.
+Temporarily add a **Quick Look** of `page` immediately after the Run JavaScript
+step, share a real product page from Safari, and read the JSON *before*
+anything is posted. Remove the Quick Look when you're done.
 
-Worth doing on a few different retailers — the failure mode isn't an error, it's
-a plausible-looking photo of the wrong thing.
+What you want to see is four non-empty fields. An empty `title` means the
+JavaScript ran against the wrong input — check step 3's input is *Shortcut
+Input*. Empty everything means the page declares no og: tags at all, which is
+rare on a retailer and is the case where the server's own scrape is still the
+fallback.
 
 ### 3. The whole path
 

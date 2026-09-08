@@ -10,8 +10,8 @@ export const maxDuration = 60
  * POST /api/capture — the iOS Shortcut's endpoint (spec §2.2).
  *
  * Accepts either shape:
- *   application/json      { url, note? }
- *   multipart/form-data   url, note?, image?
+ *   application/json      { url, note?, page? }
+ *   multipart/form-data   url, note?, image?, page?
  *
  * The multipart form exists so the Shortcut can send a thumbnail it grabbed
  * from the page already rendered on your phone. That's the only reliable way
@@ -41,6 +41,9 @@ export async function POST(request: Request) {
   let url: unknown
   let note: unknown
   let image: unknown
+  /** JSON string of the page's own og: tags, read on-device. See
+   *  `parseClientPage`. */
+  let page: unknown
 
   if (contentType.includes('multipart/form-data')) {
     let form: FormData
@@ -52,6 +55,7 @@ export async function POST(request: Request) {
     url = form.get('url')
     note = form.get('note')
     image = form.get('image')
+    page = form.get('page')
   } else {
     let body: unknown
     try {
@@ -59,10 +63,16 @@ export async function POST(request: Request) {
     } catch {
       return NextResponse.json({ error: 'Body must be JSON or multipart/form-data' }, { status: 400 })
     }
-    ;({ url, note } = (body ?? {}) as { url?: unknown; note?: unknown })
+    ;({ url, note, page } = (body ?? {}) as {
+      url?: unknown
+      note?: unknown
+      page?: unknown
+    })
+    // JSON callers may send the object inline rather than as a string.
+    if (page && typeof page === 'object') page = JSON.stringify(page)
   }
 
-  const result = await saveLink(url, note, image)
+  const result = await saveLink(url, note, image, page)
 
   return result.ok
     ? NextResponse.json({ id: result.id, saved: true }, { status: 201 })

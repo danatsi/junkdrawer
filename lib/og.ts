@@ -178,6 +178,68 @@ function findIconHref(root: HTMLElement, baseUrl: string): string | undefined {
 }
 
 /**
+ * Page metadata the Shortcut read out of the DOM in the browser that rendered
+ * it, posted as a JSON string.
+ *
+ * This is the whole point of the Shortcut. A server-side scrape of a large
+ * retailer gets an interstitial — Zara serves Akamai, Etsy and H&M answer 403
+ * — so `fetchOpenGraph` comes back empty for exactly the sites worth saving.
+ * Your own browser already has the page, with your session and your IP, and
+ * the same four meta tags are sitting in it.
+ *
+ * Only the URL is taken from here, never the bytes: the image is fetched
+ * server-side from that URL. Retailers bot-block their page HTML but not
+ * their image CDNs, so that fetch works where the scrape didn't, and the
+ * phone never has to download, resize or convert anything.
+ *
+ * Anything malformed returns null rather than throwing. The scrape is still
+ * there to fall back on, and a bad blob should cost a row its metadata, not
+ * its existence.
+ */
+export function parseClientPage(value: unknown, baseUrl: string): OgData | null {
+  if (typeof value !== 'string' || !value.trim()) return null
+
+  let raw: unknown
+  try {
+    raw = JSON.parse(value)
+  } catch {
+    return null
+  }
+  if (!raw || typeof raw !== 'object') return null
+
+  const { title, description, image, site } = raw as Record<string, unknown>
+  const out: OgData = {}
+
+  // Same treatment the scraped title gets. The Shortcut sends og:title raw,
+  // so without this a captured row keeps the "… | Store Name" the scrape path
+  // has stripped since the titles change.
+  const cleanedTitle = typeof title === 'string' ? clean(title) : undefined
+  if (cleanedTitle) {
+    out.title = stripSiteChrome(cleanedTitle, typeof site === 'string' ? site : undefined, baseUrl)
+  }
+
+  const cleanedDescription = typeof description === 'string' ? clean(description) : undefined
+  if (cleanedDescription) out.description = cleanedDescription
+
+  if (typeof image === 'string' && image.trim()) out.image = absolute(image, baseUrl)
+
+  return Object.keys(out).length > 0 ? out : null
+}
+
+/** Client metadata wins field by field, because it came from the real page and
+ *  the scrape may be an interstitial. Missing fields fall through, so a site
+ *  that scrapes fine still contributes whatever the Shortcut didn't find. */
+export function mergeOg(scraped: OgData, client: OgData | null | undefined): OgData {
+  if (!client) return scraped
+  return {
+    title: client.title ?? scraped.title,
+    description: client.description ?? scraped.description,
+    image: client.image ?? scraped.image,
+    iconHref: scraped.iconHref,
+  }
+}
+
+/**
  * Cuts the trailing site chrome off a scraped title — "… | Store Name",
  * "… - Shop". That chrome is the whole reason the title used to be handed to
  * the model to rewrite, and rewriting it is what turned a Hebrew book page

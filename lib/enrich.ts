@@ -1,7 +1,7 @@
 import 'server-only'
 import { createHash } from 'node:crypto'
 import { getSupabase, isSupabaseConfigured } from './supabase'
-import { fetchOpenGraph, isPlaceholderTitle } from './og'
+import { fetchOpenGraph, isPlaceholderTitle, mergeOg, type OgData } from './og'
 import { ensureFavicon } from './icons'
 import { fetchImage } from './fetch-image'
 import { uploadImage } from './storage'
@@ -27,6 +27,9 @@ export interface EnrichTarget {
   /** Set when the capture already stored a photo taken from the rendered page.
    *  Nothing scraped can beat that, so enrichment leaves the image alone. */
   keepImage?: boolean
+  /** Metadata the Shortcut read from the page in your own browser. Beats the
+   *  scrape wherever the two disagree — see `parseClientPage`. */
+  page?: OgData | null
 }
 
 export async function enrich(link: EnrichTarget): Promise<void> {
@@ -39,8 +42,10 @@ export async function enrich(link: EnrichTarget): Promise<void> {
   const startedAt = Date.now()
 
   try {
-    // 1. Open Graph. Returns {} rather than throwing on any failure.
-    const og = await fetchOpenGraph(link.url)
+    // 1. Open Graph. Returns {} rather than throwing on any failure. Where
+    //    the Shortcut sent what the page said, that wins: it read the real
+    //    page, and this fetch may well have been handed an interstitial.
+    const og = mergeOg(await fetchOpenGraph(link.url), link.page)
 
     // 1b. An IMDb title URL is the case where a failed scrape is not merely
     //     thin data. IMDb blocks the fetch above (it answers 202 with a bot
