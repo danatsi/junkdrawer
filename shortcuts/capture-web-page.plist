@@ -310,47 +310,8 @@ completion(JSON.stringify({
 				<false/>
 				<key>UUID</key>
 				<string>EC1804DB-6CC5-4A5C-9D65-AD6B2C9730A3</string>
-				<key>WFFormValues</key>
-				<dict>
-					<key>Value</key>
-					<dict>
-						<key>WFDictionaryFieldValueItems</key>
-						<array>
-							<dict>
-								<key>WFItemType</key>
-								<integer>5</integer>
-								<key>WFKey</key>
-								<dict>
-									<key>Value</key>
-									<dict>
-										<key>string</key>
-										<string>image</string>
-									</dict>
-									<key>WFSerializationType</key>
-									<string>WFTextTokenString</string>
-								</dict>
-								<key>WFValue</key>
-								<dict>
-									<key>Value</key>
-									<dict>
-										<key>OutputName</key>
-										<string>Converted Image</string>
-										<key>OutputUUID</key>
-										<string>89876ADA-5D7E-41A5-A87A-12BDFEB3DC98</string>
-										<key>Type</key>
-										<string>ActionOutput</string>
-									</dict>
-									<key>WFSerializationType</key>
-									<string>WFTextTokenAttachment</string>
-								</dict>
-							</dict>
-						</array>
-					</dict>
-					<key>WFSerializationType</key>
-					<string>WFDictionaryFieldValue</string>
-				</dict>
 				<key>WFHTTPBodyType</key>
-				<string>Form</string>
+				<string>File</string>
 				<key>WFHTTPHeaders</key>
 				<dict>
 					<key>Value</key>
@@ -388,6 +349,20 @@ completion(JSON.stringify({
 				</dict>
 				<key>WFHTTPMethod</key>
 				<string>POST</string>
+				<key>WFRequestVariable</key>
+				<dict>
+					<key>Value</key>
+					<dict>
+						<key>OutputName</key>
+						<string>Converted Image</string>
+						<key>OutputUUID</key>
+						<string>89876ADA-5D7E-41A5-A87A-12BDFEB3DC98</string>
+						<key>Type</key>
+						<string>ActionOutput</string>
+					</dict>
+					<key>WFSerializationType</key>
+					<string>WFTextTokenAttachment</string>
+				</dict>
 				<key>WFURL</key>
 				<string>https://junkdrawer-alpha.vercel.app/api/capture/screenshot</string>
 			</dict>

@@ -9,7 +9,16 @@ export const maxDuration = 60
  * POST /api/capture/screenshot — the image counterpart of /api/capture
  * (spec §5.4), for the iOS Shortcut's image share path.
  *
- * Body: multipart/form-data with `image` (and optional `note`)
+ * Body: either
+ *   multipart/form-data   `image` file, optional `note`   (the in-app form)
+ *   image/*               the raw bytes, optional `?note=`  (the Shortcut)
+ *
+ * The second shape exists because Shortcuts cannot reliably put a file in a
+ * form field. Its "Form" body renders an image variable to text — the field
+ * arrives as a zero-length string and the bytes never leave the phone — while
+ * its "File" body sends the image as the whole request. So the Shortcut uses
+ * File and the note rides along in the query string.
+ *
  * Auth: Authorization: Bearer <CAPTURE_TOKEN>
  *
  * Expects an already-compressed image. The browser form shrinks it before
@@ -26,6 +35,21 @@ export async function POST(request: Request) {
   const provided = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '')
   if (!provided || !timingSafeEqual(provided, expected)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  // A raw image body: the whole request is the file.
+  const bodyType = request.headers.get('content-type') ?? ''
+  if (bodyType.startsWith('image/')) {
+    const type = bodyType.split(';')[0].trim()
+    const bytes = await request.arrayBuffer()
+    const note = new URL(request.url).searchParams.get('note')
+    const result = await saveScreenshot(new File([bytes], `screenshot.${type.split('/')[1] || 'jpg'}`, { type }), note)
+    if (!result.ok) {
+      console.warn('screenshot rejected (raw body):', result.error, JSON.stringify({ type, bytes: bytes.byteLength }))
+    }
+    return result.ok
+      ? NextResponse.json({ id: result.id, saved: true }, { status: 201 })
+      : NextResponse.json({ error: result.error }, { status: result.status })
   }
 
   let form: FormData
