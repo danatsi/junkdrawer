@@ -10,8 +10,15 @@ export const maxDuration = 60
  * POST /api/capture — the iOS Shortcut's endpoint (spec §2.2).
  *
  * Accepts either shape:
- *   application/json      { url, note?, page? }
- *   multipart/form-data   url, note?, image?, page?
+ *   application/json                    { url, note?, page? }
+ *   multipart/form-data                 url, note?, image?, page?
+ *   application/x-www-form-urlencoded   url, note?, page?
+ *
+ * The third is not a nicety. The Shortcut's "Form" body only sends multipart
+ * when one of its fields holds a file, and once link capture stopped sending
+ * a photo it quietly became urlencoded — which used to fall through to the
+ * JSON branch and fail on `page=%7B%22title%22...`. Both are form encodings
+ * and `formData()` reads either, so they share a path.
  *
  * The multipart form exists so the Shortcut can send a thumbnail it grabbed
  * from the page already rendered on your phone. That's the only reliable way
@@ -45,7 +52,11 @@ export async function POST(request: Request) {
    *  `parseClientPage`. */
   let page: unknown
 
-  if (contentType.includes('multipart/form-data')) {
+  const isFormEncoded =
+    contentType.includes('multipart/form-data') ||
+    contentType.includes('application/x-www-form-urlencoded')
+
+  if (isFormEncoded) {
     let form: FormData
     try {
       form = await request.formData()
@@ -56,11 +67,11 @@ export async function POST(request: Request) {
       // an empty or list-valued variable, and without this the request looks
       // identical to a missing url.
       console.warn(
-        'capture: multipart parse failed:',
+        'capture: form parse failed:',
         parseError instanceof Error ? parseError.message : String(parseError),
         JSON.stringify({ contentType, length: request.headers.get('content-length') ?? 'unset' }),
       )
-      return NextResponse.json({ error: 'Malformed multipart body' }, { status: 400 })
+      return NextResponse.json({ error: 'Malformed form body' }, { status: 400 })
     }
     url = form.get('url')
     note = form.get('note')
@@ -76,7 +87,7 @@ export async function POST(request: Request) {
         parseError instanceof Error ? parseError.message : String(parseError),
         JSON.stringify({ contentType, length: request.headers.get('content-length') ?? 'unset' }),
       )
-      return NextResponse.json({ error: 'Body must be JSON or multipart/form-data' }, { status: 400 })
+      return NextResponse.json({ error: 'Body must be JSON or form-encoded' }, { status: 400 })
     }
     ;({ url, note, page } = (body ?? {}) as {
       url?: unknown
