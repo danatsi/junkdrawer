@@ -57,6 +57,21 @@ export async function uploadImage(
 }
 
 /**
+ * Deletes the object a `storage:` reference points at. Used when a row is
+ * deleted outright — without it, deleting is only a database operation and
+ * the picture stays in the bucket for good.
+ *
+ * Only ever called with a row's own `image_url`, which is what keeps this
+ * safe: a favicon is a plain https URL in the public bucket shared by every
+ * row from that domain, so `parseStorageRef` rejects it and it can't be
+ * deleted out from under its neighbours.
+ */
+export async function removeImage(bucket: Bucket, objectPath: string): Promise<void> {
+  const { error } = await getSupabase().storage.from(bucket).remove([objectPath])
+  if (error) throw new Error(`${bucket} delete failed: ${error.message}`)
+}
+
+/**
  * Resolves every `storage:` reference in one pass, batched per bucket. The
  * list can hold an image per row, and signing them one request at a time would
  * put a round-trip per row on the page's critical path.

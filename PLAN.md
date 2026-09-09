@@ -177,8 +177,23 @@ Rows sorted `created_at desc`, `status = 'unread'` only.
 
 ### Phase 6 — Polish (resolves the remaining spec §6 questions)
 - **Frontend gate** (§5 below) — do this before the URL is shared anywhere.
-- **Swipe-to-archive** (open q2) — Framer Motion `drag="x"`; proposal: left swipe past ~40% reveals archive,
-  release commits, undo toast for 5s, sets `status = 'done'`. Non-destructive; nothing is deleted.
+- **Swipe** (open q2) — **built.** Left-swipe uncovers two buttons behind the row, Archive and
+  Delete, and you tap one. Either way the row leaves the list at once and an undo toast stands
+  for 5s.
+  - Archive is the old behaviour: `status = 'done'`, written immediately, undo sets it back.
+  - Delete is new and is the only irreversible write in the app. `DELETE /api/links/[id]` also
+    removes the row's own image from its bucket — a favicon is a plain https URL shared by every
+    row from that domain, so `parseStorageRef` refuses it and it can't be taken out from under
+    its neighbours.
+  - **The undo for a delete is the delay itself.** The request isn't sent when you tap; it's sent
+    when the toast expires, so undo is simply never sending it. No soft-delete column, and no
+    "restore" path that would have to put back an image already gone. A `pagehide` listener
+    flushes a still-pending delete with `keepalive`, so leaving the page commits it rather than
+    resurrecting a row you watched leave.
+  - The first cut of this decided by distance instead — archive past 40% of the row's width,
+    delete past 75%. It was wrong in a way worth recording: the destructive outcome was the one
+    you got by swiping *harder*, and at 75% your thumb is over the label that would have told you
+    so. Two buttons cost one extra tap and remove the entire class of mistake.
 - **Empty state** (open q3) — proposal: wordmark + one line of sentence-case copy, no illustration.
   Different copy for "nothing saved yet" vs "nothing tagged `recipe`".
 - **Search** (open q4) — **built.** A field revealed by the icon in the header, filtering the
@@ -288,6 +303,6 @@ If a bulk import ever happens, enrichment needs a queue; it doesn't need one now
 
 - **§6 q7** — screenshot share icon: WhatsApp-branded or generic. v2, no need to decide yet.
 - **§6 q8** — Gemini fallback for image-only screenshots with no text. v2.
-- Phase 6 proposals above (swipe, empty state, multi-expand) are proposals, not decisions —
-  worth confirming when Phase 6 starts rather than now, since daily use will inform them. Search
-  is no longer among them: it's built and described above.
+- Phase 6 proposals above (empty state, multi-expand) are proposals, not decisions — worth
+  confirming when Phase 6 starts rather than now, since daily use will inform them. Search and
+  the swipe are no longer among them: both are built and described above.

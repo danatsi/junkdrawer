@@ -3,21 +3,41 @@
   overflow: hidden;
 }
 
-/* Sits behind the row and is revealed as it slides left. */
-.backdrop {
+/* The action tray, right-aligned behind the row and uncovered as it slides.
+   Two buttons rather than one full-bleed backdrop: the row no longer decides
+   which action you meant, so both have to be visible and tappable at once. */
+.tray {
+  --tray-button: 88px; /* must match BUTTON_WIDTH in SwipeableRow.tsx */
   position: absolute;
-  inset: 0;
+  inset: 0 0 0 auto;
   display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  padding-right: 24px;
-  background: var(--color-accent);
-  color: var(--color-accent-bg);
-  font-size: 13px;
-  letter-spacing: 0.01em;
+  width: calc(var(--tray-button) * 2);
 }
 
-/* Opaque, or the backdrop shows through the row as it moves. */
+.action {
+  flex: 1;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  font: inherit;
+  font-size: 13px;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+}
+
+/* Delete. The palette is otherwise hueless on purpose (globals.css: the
+   thumbnails are the only colour, because they're other people's images), and
+   this is the one deliberate exception — it's the only control in the app that
+   can't be taken back, and it sits directly beside one that can. Telling them
+   apart by label alone would put the whole weight of that on a 13px word. */
+.destructive {
+  background: var(--color-danger);
+  color: var(--color-danger-text);
+}
+
+/* Opaque, or the tray shows through the row as it moves. */
 .sheet {
   position: relative;
   background: var(--color-bg);

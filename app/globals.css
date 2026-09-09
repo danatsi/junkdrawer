@@ -21,6 +21,15 @@
   --color-accent: #ECECEE;
   --color-accent-bg: #16171A;
 
+  /* The one hue in the app, and only ever behind a finger: the delete tier of
+     the swipe. Muted rather than a signal red — it has to read as destructive
+     against a near-black ground without becoming the brightest thing on a
+     screen full of photographs. Nothing else may use it; if a second thing
+     ever needs to look dangerous, that's the moment to ask whether the app
+     has a colour system rather than an exception. */
+  --color-danger: #8C2F2A;
+  --color-danger-text: #F6EDEC;
+
   /* One family covers Latin and Hebrew, so the next/font variable is usable
      directly. A two-family stack could not use it: next/font folds a
      metric-matched local(Arial) face into the variable with no unicode-range,

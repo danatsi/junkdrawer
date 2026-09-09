@@ -82,16 +82,45 @@ export function groupIntoSections(links: Link[]): Section[] {
   return sections
 }
 
+/** The two tiers of the swipe: shallow archives, deep deletes. */
+type SwipeAction = 'archive' | 'delete'
+
+/** The row a swipe just took out of the list, held for the undo window. */
+interface Pending {
+  link: Link
+  action: SwipeAction
+}
+
+/**
+ * The one write in the app with no way back, which is why it isn't sent when
+ * the gesture completes — the toast holds it, and `commit` sends it once the
+ * undo window has closed over it. There's no soft-delete column behind this:
+ * the undo is the delay itself.
+ */
+async function destroy(id: string, { keepalive = false } = {}): Promise<void> {
+  try {
+    await fetch(`/api/links/${id}`, { method: 'DELETE', keepalive })
+  } catch {
+    // Same reasoning as a failed status write: the row has already left the
+    // list, and the next load is a better place to disagree than mid-toast.
+    console.error('Could not delete link')
+  }
+}
+
 export function LinkList({ links }: { links: Link[] }) {
   const [activeTag, setActiveTag] = useState<string>(ALL)
   const [searchOpen, setSearchOpen] = useState(false)
   const [query, setQuery] = useState('')
-  // Archived rows are tracked by id and filtered out of the server list rather
-  // than copied into state. The server list stays the single source of truth,
-  // so a refresh can't be clobbered, and undo restores a row to its original
-  // position without having to remember an index.
-  const [archivedIds, setArchivedIds] = useState<ReadonlySet<string>>(new Set())
-  const [archived, setArchived] = useState<Link | null>(null)
+  // Swiped-away rows are tracked by id and filtered out of the server list
+  // rather than copied into state. The server list stays the single source of
+  // truth, so a refresh can't be clobbered, and undo restores a row to its
+  // original position without having to remember an index.
+  const [removedIds, setRemovedIds] = useState<ReadonlySet<string>>(new Set())
+  const [pending, setPending] = useState<Pending | null>(null)
+  // Which row has its action tray uncovered. Owned here rather than by each
+  // row so that swiping one closes the last: a single id can hold "only one
+  // at a time", and a boolean per row can't.
+  const [swipedId, setSwipedId] = useState<string | null>(null)
   // Which panels are open. Lifted out of the rows so several can be open at
   // once (the spec §6 q5 decision) *and* something above them can close them
   // all — a row owning its own boolean can do the first but not the second.
@@ -144,25 +173,50 @@ export function LinkList({ links }: { links: Link[] }) {
     }
   }, [])
 
-  const archive = useCallback(
-    (link: Link) => {
-      setArchivedIds((current) => new Set(current).add(link.id))
-      setArchived(link)
-      void setStatus(link.id, 'done')
+  const remove = useCallback(
+    (link: Link, action: SwipeAction) => {
+      setRemovedIds((current) => new Set(current).add(link.id))
+      // The tray goes with the row. Left set, it would reopen under the row
+      // that undo puts back.
+      setSwipedId(null)
+      setPending({ link, action })
+      // An archive is written straight away because it's reversible either
+      // way: the row is still in the table and undo just sets it back. A
+      // delete isn't sent at all until the undo window closes — see `commit`.
+      if (action === 'archive') void setStatus(link.id, 'done')
     },
     [setStatus],
   )
 
   const undo = useCallback(() => {
-    if (!archived) return
-    setArchivedIds((current) => {
+    if (!pending) return
+    setRemovedIds((current) => {
       const next = new Set(current)
-      next.delete(archived.id)
+      next.delete(pending.link.id)
       return next
     })
-    setArchived(null)
-    void setStatus(archived.id, 'unread')
-  }, [archived, setStatus])
+    setPending(null)
+    if (pending.action === 'archive') void setStatus(pending.link.id, 'unread')
+    // Undoing a delete is nothing more than never having sent it.
+  }, [pending, setStatus])
+
+  /** The undo window closed: whatever was being held back now happens. */
+  const commit = useCallback(() => {
+    if (pending?.action === 'delete') void destroy(pending.link.id)
+    setPending(null)
+  }, [pending])
+
+  // The row is gone from the list the moment it's swiped, but the request that
+  // makes that true is five seconds behind it — so a tab closed inside the
+  // window would resurrect a row the person watched leave. Sent on the way out
+  // instead, with `keepalive` so it survives the page being torn down.
+  useEffect(() => {
+    if (pending?.action !== 'delete') return
+    const id = pending.link.id
+    const flush = () => void destroy(id, { keepalive: true })
+    window.addEventListener('pagehide', flush)
+    return () => window.removeEventListener('pagehide', flush)
+  }, [pending])
 
   const toggleSection = useCallback((key: string) => {
     setCollapsedSections((current) => {
@@ -190,14 +244,24 @@ export function LinkList({ links }: { links: Link[] }) {
   // stemming the query is the expensive half, and it doesn't depend on the row.
   const compiled = useMemo(() => compileQuery(query), [query])
   const visible = links
-    .filter((l) => !archivedIds.has(l.id))
+    .filter((l) => !removedIds.has(l.id))
     .filter((l) => activeTag === ALL || l.tags.includes(activeTag))
     .filter((l) => !compiled || matchesQuery(l, compiled))
 
   const sections = activeTag === ALL ? groupIntoSections(visible) : null
 
   const renderRow = (link: Link) => (
-    <SwipeableRow key={link.id} onArchive={() => archive(link)}>
+    <SwipeableRow
+      key={link.id}
+      open={swipedId === link.id}
+      // Closing is scoped to this row so that a row settling shut can't clear
+      // the tray another row has just opened.
+      onOpenChange={(open) =>
+        setSwipedId((current) => (open ? link.id : current === link.id ? null : current))
+      }
+      onArchive={() => remove(link, 'archive')}
+      onDelete={() => remove(link, 'delete')}
+    >
       {link.type === 'screenshot' ? (
         <ScreenshotRow
           link={link}
@@ -368,13 +432,13 @@ export function LinkList({ links }: { links: Link[] }) {
       )}
 
       <AnimatePresence>
-        {archived && (
+        {pending && (
           <Toast
-            key={archived.id}
-            message="Archived"
+            key={pending.link.id}
+            message={pending.action === 'delete' ? 'Deleted' : 'Archived'}
             actionLabel="Undo"
             onAction={undo}
-            onExpire={() => setArchived(null)}
+            onExpire={commit}
           />
         )}
       </AnimatePresence>
