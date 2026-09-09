@@ -31,11 +31,39 @@ export async function POST(request: Request) {
   let form: FormData
   try {
     form = await request.formData()
-  } catch {
+  } catch (parseError) {
+    console.warn(
+      'screenshot: form parse failed:',
+      parseError instanceof Error ? parseError.message : String(parseError),
+      request.headers.get('content-type') ?? 'no content-type',
+    )
     return NextResponse.json({ error: 'Body must be multipart/form-data' }, { status: 400 })
   }
 
-  const result = await saveScreenshot(form.get('image'), form.get('note'))
+  const image = form.get('image')
+  const result = await saveScreenshot(image, form.get('note'))
+
+  if (!result.ok) {
+    // Same reasoning as /api/capture: a rejected share is invisible from the
+    // phone, and the platform log carries only the status. The likeliest
+    // failure here is the Shortcut sending the image as a *text* form field,
+    // which arrives as a string rather than a File and is indistinguishable
+    // from an empty upload without this.
+    console.warn(
+      'screenshot rejected:',
+      result.error,
+      JSON.stringify({
+        image:
+          image instanceof File
+            ? `file(${image.type || 'no type'}, ${image.size}b, name=${image.name || 'unnamed'})`
+            : image === null
+              ? 'absent'
+              : `${typeof image}(${String(image).length} chars)`,
+        fields: [...form.keys()],
+      }),
+    )
+  }
+
   return result.ok
     ? NextResponse.json({ id: result.id, saved: true }, { status: 201 })
     : NextResponse.json({ error: result.error }, { status: result.status })
