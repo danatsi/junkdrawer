@@ -43,7 +43,13 @@ export async function POST(request: Request) {
   // malformed form -- and a header a client controls is worth less here than
   // four bytes it cannot fake.
   const declared = request.headers.get('content-type') ?? ''
-  if (!declared.includes('multipart/form-data')) {
+  // Both form encodings go to the form parser. The Shortcut's Form body is
+  // multipart only when a field holds a file, and urlencoded otherwise -- the
+  // same distinction that broke /api/capture, and the shape this route now
+  // receives, since the image travels as base64 text.
+  const isForm =
+    declared.includes('multipart/form-data') || declared.includes('application/x-www-form-urlencoded')
+  if (!isForm) {
     const bytes = await request.arrayBuffer()
     const sniffed = sniffImageType(bytes)
     if (!sniffed) {
@@ -80,7 +86,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Body must be multipart/form-data' }, { status: 400 })
   }
 
-  const image = form.get('image')
+  // `image_b64` is how the Shortcut sends a picture. Neither of the two
+  // obvious routes works: a Form field typed as a file arrives as a
+  // zero-length string, and the File body type sends an empty request. A text
+  // field is the one shape that demonstrably survives the trip, so the image
+  // travels as base64 inside one.
+  const encoded = form.get('image_b64')
+  const image =
+    typeof encoded === 'string' && encoded.trim() ? decodeBase64Image(encoded) : form.get('image')
+
   const result = await saveScreenshot(image, form.get('note'))
 
   if (!result.ok) {
@@ -107,6 +121,29 @@ export async function POST(request: Request) {
   return result.ok
     ? NextResponse.json({ id: result.id, saved: true }, { status: 201 })
     : NextResponse.json({ error: result.error }, { status: result.status })
+}
+
+/**
+ * Base64 back into a File, typed from its own bytes. Shortcuts may wrap the
+ * output across lines, which `atob` rejects, so whitespace goes first.
+ * Returns null rather than throwing: a corrupt field should be "no image
+ * received", not a 500.
+ */
+function decodeBase64Image(encoded: string): File | null {
+  try {
+    const bytes = Buffer.from(encoded.replace(/\s+/g, ''), 'base64')
+    if (bytes.byteLength === 0) return null
+    const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
+    const type = sniffImageType(buffer)
+    if (!type) {
+      console.warn('screenshot: image_b64 decoded to something that is not an image',
+        JSON.stringify({ chars: encoded.length, bytes: bytes.byteLength, head: head(buffer) }))
+      return null
+    }
+    return new File([buffer], `screenshot.${type.split('/')[1]}`, { type })
+  } catch {
+    return null
+  }
 }
 
 /**
