@@ -120,6 +120,13 @@ export async function enrich(link: EnrichTarget): Promise<void> {
     })
     if (generated.clean_title && !scrapedTitle) update.title = generated.clean_title
     if (generated.summary) update.description = generated.summary
+    // An empty summary is a real answer on a results page — the model is told
+    // to give one rather than gloss a query it can't read — so there it has to
+    // be able to clear the field. Everywhere else the guard stays: a blank
+    // summary must not wipe a scraped or TMDb description that's still good.
+    // Without this, re-enriching the row that started all of this kept
+    // "Search results for Dolly Parton related content." under a fixed title.
+    else if (searchQuery) update.description = null
     update.tags = generated.tags
     // Guarded rather than assigned outright, unlike `tags`: an empty tag list
     // is a real answer ("nothing in the vocabulary fits"), an empty keyword
