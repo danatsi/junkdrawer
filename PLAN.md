@@ -246,6 +246,17 @@ Shortcut POST /api/capture
       any failure ──► enrichment: failed + enrich_error, row still usable
 ```
 
+Two URL shapes get special handling before step 2, because for both of them the scraped page is
+actively misleading rather than merely thin:
+
+- **An IMDb title URL** is resolved by id first (step 1b), so the film is looked up rather than
+  guessed from `/title/tt1442437/`.
+- **A page of search results** has its scraped title, description and image dropped wholesale
+  (step 1c). A Google results page scrapes as the bare title "Google Search" with no description
+  and no image, whatever was being looked for — so the terms in `?q=` become the subject and the
+  title, and the model is told to name the thing rather than the search. Before this, a search
+  for a book was saved as a row called "Google Search".
+
 The row is never blocked on enrichment. Worst case it shows `zara.com` as its title until retried.
 
 ---

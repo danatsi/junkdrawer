@@ -92,7 +92,9 @@ function searchTermsRule(label: string): string {
     "   ג'ינס and גינס alongside jeans, pants, trousers and denim; a Hebrew recipe needs",
     '   chicken next to עוף. Plain category word first, then everyday synonyms, then the',
     '   brand or site name, then the colour, material, cuisine or genre. Never "link",',
-    '   "page", "website" or the tag names themselves.',
+    '   "page", "website", the tag names themselves, or — on a page of search results —',
+    '   "search", "query", "results" or the name of the search engine. Terms describe the',
+    '   thing, never how it was found.',
   ].join('\n')
 }
 
@@ -178,6 +180,9 @@ export async function generateMetadata(input: {
   domain: string | null
   note: string | null
   og: OgData
+  /** What the person typed, when the URL is a page of search results. See
+   *  `searchQueryOf` — on those pages this is the only real signal there is. */
+  searchQuery?: string | null
 }): Promise<GeminiResult> {
   return toResult(await withRetry(() => attempt(buildPrompt(input), RESPONSE_SCHEMA)))
 }
@@ -407,11 +412,13 @@ function buildPrompt({
   domain,
   note,
   og,
+  searchQuery,
 }: {
   url: string
   domain: string | null
   note: string | null
   og: OgData
+  searchQuery?: string | null
 }): string {
   const scraped = [
     og.title && `page title: ${og.title}`,
@@ -427,6 +434,27 @@ function buildPrompt({
     `url: ${url}`,
     domain && `domain: ${domain}`,
     scraped || 'scraped page data: none — the site blocked it or has no metadata',
+    // A results page is the one case where the page is worth nothing and the
+    // URL is worth everything: what scrapes is "Google Search" with no
+    // description and no image, while the terms in ?q= are the actual subject.
+    // Left to itself the model titles the row after the search engine, which
+    // is how a search for a book was saved as "Google Search".
+    searchQuery
+      ? `\nthis is a page of SEARCH RESULTS. the person searched for: "${searchQuery}"\n` +
+        'Those words are the subject of this row. Work out what they were looking for and ' +
+        'name it: if they name a book, film, product, place or person, use that name as ' +
+        'clean_title. Never add specifics the query does not support — if the words are all ' +
+        'there is, the title is the words, tidied.\n' +
+        'Nothing in this row may describe the search itself. Not the title, not the summary, ' +
+        'not the tags, not the search terms: no "search", no "results", no "query", no ' +
+        'search engine name. The summary says what the thing is, or what kind of thing it ' +
+        'appears to be, and is empty rather than saying that results were searched for. If ' +
+        'the query is too vague to tell what was meant, leave the summary empty — a glossed ' +
+        'explanation of the words is worse than nothing — and let search_terms be the ' +
+        'query\'s own words plus their direct translation, nothing inferred. "dolly all the ' +
+        'time" is not enough to know whether that is a person or a doll, and terms guessed ' +
+        'from the wrong reading make the row answer to searches it has nothing to do with.'
+      : '',
     // Spec §3.3: the note beats the page text, because it records why the
     // person actually saved the thing.
     note

@@ -277,6 +277,22 @@ export function stripSiteChrome(
 }
 
 /**
+ * Words that name a *kind* of page rather than a page: what's left of a title
+ * once the site's own name is taken out of it. Normalised, so they're compared
+ * without spaces or punctuation.
+ */
+const GENERIC_PAGE_WORDS = [
+  'search',
+  'searchresults',
+  'results',
+  'home',
+  'homepage',
+  'start',
+  'startpage',
+  'index',
+]
+
+/**
  * A scraped title that says nothing about the page: a bot interstitial, a
  * login wall, or the bare site name. These are the cases the model is still
  * better at than the scrape, since it can at least read the URL path.
@@ -284,22 +300,60 @@ export function stripSiteChrome(
 export function isPlaceholderTitle(title: string, baseUrl: string): boolean {
   const normalised = normalise(title)
   if (normalised.length < 3) return true
-  if (siteIdentifiers(undefined, baseUrl).includes(normalised)) return true
+  if (GENERIC_PAGE_WORDS.includes(normalised)) return true
+
+  // The site's name, alone or wearing one of those words. "Google Search" is
+  // the case this exists for: it survived the chrome-stripping above because
+  // there's no separator to split on, then beat a perfectly good generated
+  // title, and a Google results page for a book got saved as "Google Search".
+  // The name plus a generic word is still just the name.
+  for (const id of siteIdentifiers(undefined, baseUrl)) {
+    if (normalised === id) return true
+    for (const word of GENERIC_PAGE_WORDS) {
+      if (normalised === id + word || normalised === word + id) return true
+    }
+  }
+
   return /^(just a moment|attention required|access denied|forbidden|error|not found|page not found|404|403|robot check|are you a robot|please enable javascript|enable javascript|log ?in|sign ?in|redirecting|loading)\b/i.test(
     title.trim(),
   )
 }
 
+/**
+ * Hostname labels that are never the brand: the public suffix parts, and the
+ * handful of prefixes sites put in front of their own name. Not a full public
+ * suffix list — that's a dependency and a data file to keep current, and the
+ * only cost of missing one here is a title that keeps its chrome, which is
+ * where this started.
+ */
+const NON_BRAND_LABELS = new Set([
+  'com', 'org', 'net', 'edu', 'gov', 'int', 'mil', 'io', 'ai', 'co', 'uk', 'il', 'us', 'de',
+  'fr', 'es', 'it', 'nl', 'ru', 'jp', 'cn', 'au', 'ca', 'in', 'br', 'se', 'no', 'dk', 'fi',
+  'pl', 'cz', 'tr', 'gr', 'pt', 'ch', 'at', 'be', 'ie', 'nz', 'za', 'mx', 'ar', 'cl',
+  'www', 'shop', 'store', 'blog', 'news', 'app', 'web', 'search', 'my', 'go',
+])
+
 /** The names a segment could be using to identify the site: whatever
- *  `og:site_name` declared, plus the brand label out of the hostname. */
+ *  `og:site_name` declared, plus the brand labels out of the hostname.
+ *
+ *  Every label is considered, not just the first. Taking only the first read
+ *  "en" as Wikipedia's brand, so nothing matched the "- Wikipedia" hanging off
+ *  every article title and it was saved as part of the title; the same went
+ *  for any host with a subdomain, which is most shops. */
 function siteIdentifiers(siteName: string | undefined, baseUrl: string): string[] {
   const out: string[] = []
   const declared = siteName && normalise(siteName)
   if (declared) out.push(declared)
   try {
-    const host = new URL(baseUrl).hostname.replace(/^www\./, '')
-    const brand = normalise(host.split('.')[0] ?? '')
-    if (brand && !out.includes(brand)) out.push(brand)
+    const host = new URL(baseUrl).hostname
+    for (const label of host.split('.')) {
+      // Two characters can't be matched on safely: `namesSite` only does
+      // containment for names of four or more, so a short label would have to
+      // equal the whole segment to do anything, and "en" or "co" never should.
+      if (label.length < 3 || NON_BRAND_LABELS.has(label.toLowerCase())) continue
+      const brand = normalise(label)
+      if (brand && !out.includes(brand)) out.push(brand)
+    }
   } catch {
     // A malformed base URL just means one fewer identifier.
   }

@@ -5,6 +5,7 @@ import { fetchOpenGraph, isPlaceholderTitle, mergeOg, type OgData } from './og'
 import { ensureFavicon } from './icons'
 import { fetchImage } from './fetch-image'
 import { uploadImage } from './storage'
+import { searchQueryOf } from './url'
 import { generateFromImage, generateMetadata, isGeminiConfigured } from './gemini'
 import { extractImdbId, fetchMovieData, fetchMovieDataByImdbId, type MovieData } from './movies'
 import type { Link } from './types'
@@ -62,12 +63,30 @@ export async function enrich(link: EnrichTarget): Promise<void> {
       if (movie.description) og.description = movie.description
     }
 
+    // 1c. A page of search results is the one case where the page's own
+    //     metadata describes the page instead of the thing: the title is the
+    //     engine's name, the description its tagline, the image its logo. All
+    //     three are dropped rather than ranked, because none of them can ever
+    //     be the answer — a Google results page for a book was saved as
+    //     "Google Search" by trusting the first of them. What was typed is in
+    //     the URL, and that is the subject (see `searchQueryOf`).
+    const searchQuery = searchQueryOf(link.url)
+    if (searchQuery) {
+      og.title = undefined
+      og.description = undefined
+      og.image = undefined
+    }
+
     // The page's own title wins when it has one. It is free, it is exact, and
     // it is in the language the page is written in — a Hebrew book came back
     // as "achi lo eshet hayil" when the model was the one naming rows. Site
     // chrome is already stripped in og.ts, so what's left needs no rewriting.
     const scrapedTitle = og.title && !isPlaceholderTitle(og.title, link.url) ? og.title : undefined
     if (scrapedTitle) update.title = scrapedTitle
+    // The terms stand in as the title until the model improves on them below.
+    // Without that floor, a Gemini failure on a search URL leaves the row
+    // showing "google.com", when what was typed is the one thing we know.
+    else if (searchQuery) update.title = searchQuery
     if (og.description) update.description = og.description
     // A scraped image is copied into our own bucket rather than hot-linked.
     // Hot-linking would have the browser fetch from the retailer's CDN on
@@ -97,6 +116,7 @@ export async function enrich(link: EnrichTarget): Promise<void> {
       domain: link.domain,
       note: link.note,
       og,
+      searchQuery,
     })
     if (generated.clean_title && !scrapedTitle) update.title = generated.clean_title
     if (generated.summary) update.description = generated.summary
