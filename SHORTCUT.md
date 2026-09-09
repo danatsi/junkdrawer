@@ -72,6 +72,30 @@ input **URLs and Safari web pages**.
 
 5. Optional: **Show Notification** "Saved" so the share sheet confirms.
 
+### The image branch
+
+Sharing a photo goes to a different endpoint, so the shortcut branches on
+whether the input yielded a URL — an image yields none.
+
+```
+Get URLs from Shortcut Input
+If  URLs  has any value          ← everything above
+Otherwise
+    Resize Image   Shortcut Input, width 1200 (height auto)
+    Convert Image  to JPEG
+    Get Contents of  …/api/capture/screenshot
+        POST · same Authorization header · Form · image → Converted Image
+End If
+```
+
+**Convert Image is load-bearing here and only here.** `ALLOWED_IMAGE_TYPES` in
+`lib/capture.ts` is jpeg, png and webp, iOS hands you HEIC, and Resize keeps
+whatever format it was given. Measured against production: JPEG `201`, HEIC
+`400 Unsupported image type: image/heic`.
+
+Unlike the link branch this one really does send multipart, because a file is
+present — so it can't hit the urlencoded problem that the link branch did.
+
 There is no image step. The phone sends the image *URL* inside `page` and the
 server fetches the picture itself, which is why there is nothing here to
 download, resize or convert — and no `400 Unsupported image type: image/heic`
