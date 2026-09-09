@@ -37,15 +37,31 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // A raw image body: the whole request is the file.
-  const bodyType = request.headers.get('content-type') ?? ''
-  if (bodyType.startsWith('image/')) {
-    const type = bodyType.split(';')[0].trim()
+  // Anything that isn't a form is treated as the image itself. The type comes
+  // from the bytes rather than the header: the Shortcut's "File" body does not
+  // announce `image/jpeg` -- it sent something this route first mistook for a
+  // malformed form -- and a header a client controls is worth less here than
+  // four bytes it cannot fake.
+  const declared = request.headers.get('content-type') ?? ''
+  if (!declared.includes('multipart/form-data')) {
     const bytes = await request.arrayBuffer()
+    const sniffed = sniffImageType(bytes)
+    if (!sniffed) {
+      console.warn(
+        'screenshot rejected (raw body): unrecognised bytes',
+        JSON.stringify({ declared: declared || 'none', bytes: bytes.byteLength, head: head(bytes) }),
+      )
+      return NextResponse.json({ error: 'Body is not a JPEG, PNG or WebP image' }, { status: 400 })
+    }
     const note = new URL(request.url).searchParams.get('note')
-    const result = await saveScreenshot(new File([bytes], `screenshot.${type.split('/')[1] || 'jpg'}`, { type }), note)
+    const file = new File([bytes], `screenshot.${sniffed.split('/')[1]}`, { type: sniffed })
+    const result = await saveScreenshot(file, note)
     if (!result.ok) {
-      console.warn('screenshot rejected (raw body):', result.error, JSON.stringify({ type, bytes: bytes.byteLength }))
+      console.warn(
+        'screenshot rejected (raw body):',
+        result.error,
+        JSON.stringify({ declared: declared || 'none', sniffed, bytes: bytes.byteLength }),
+      )
     }
     return result.ok
       ? NextResponse.json({ id: result.id, saved: true }, { status: 201 })
@@ -91,6 +107,30 @@ export async function POST(request: Request) {
   return result.ok
     ? NextResponse.json({ id: result.id, saved: true }, { status: 201 })
     : NextResponse.json({ error: result.error }, { status: result.status })
+}
+
+/**
+ * The image formats the bucket accepts, identified by their magic bytes.
+ * HEIC is recognised only so the error can say so: iOS hands one over
+ * whenever the Shortcut skips its Convert step, and "not an image" would send
+ * you looking in the wrong place.
+ */
+function sniffImageType(buffer: ArrayBuffer): string | null {
+  const b = new Uint8Array(buffer)
+  if (b.length < 12) return null
+  if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'image/jpeg'
+  if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return 'image/png'
+  const ascii = (start: number, end: number) => String.fromCharCode(...b.slice(start, end))
+  if (ascii(0, 4) === 'RIFF' && ascii(8, 12) === 'WEBP') return 'image/webp'
+  return null
+}
+
+/** First bytes as hex, for a log line that has to explain an unrecognised
+ *  body without quoting someone's picture into it. */
+function head(buffer: ArrayBuffer): string {
+  return [...new Uint8Array(buffer).slice(0, 12)]
+    .map((n) => n.toString(16).padStart(2, '0'))
+    .join(' ')
 }
 
 /** Constant-time compare so the token can't be recovered by timing the
