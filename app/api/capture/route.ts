@@ -49,7 +49,17 @@ export async function POST(request: Request) {
     let form: FormData
     try {
       form = await request.formData()
-    } catch {
+    } catch (parseError) {
+      // Reached when the runtime cannot parse the body at all, so there are no
+      // fields to describe -- only the exception says anything. Shortcuts can
+      // emit a multipart body the parser rejects when a form field is bound to
+      // an empty or list-valued variable, and without this the request looks
+      // identical to a missing url.
+      console.warn(
+        'capture: multipart parse failed:',
+        parseError instanceof Error ? parseError.message : String(parseError),
+        JSON.stringify({ contentType, length: request.headers.get('content-length') ?? 'unset' }),
+      )
       return NextResponse.json({ error: 'Malformed multipart body' }, { status: 400 })
     }
     url = form.get('url')
@@ -60,7 +70,12 @@ export async function POST(request: Request) {
     let body: unknown
     try {
       body = await request.json()
-    } catch {
+    } catch (parseError) {
+      console.warn(
+        'capture: body parse failed:',
+        parseError instanceof Error ? parseError.message : String(parseError),
+        JSON.stringify({ contentType, length: request.headers.get('content-length') ?? 'unset' }),
+      )
       return NextResponse.json({ error: 'Body must be JSON or multipart/form-data' }, { status: 400 })
     }
     ;({ url, note, page } = (body ?? {}) as {
