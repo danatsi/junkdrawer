@@ -74,9 +74,38 @@ export async function POST(request: Request) {
 
   const result = await saveLink(url, note, image, page)
 
+  if (!result.ok) {
+    // A rejected capture is otherwise invisible. The Shortcut shows nothing on
+    // failure, and the platform log records only the status, so a 400 from a
+    // phone is undebuggable without this. Shapes and lengths, never values —
+    // and never headers, which carry the token.
+    console.warn(
+      'capture rejected:',
+      result.error,
+      JSON.stringify({
+        contentType: contentType.split(';')[0] || 'none',
+        url: describe(url),
+        note: describe(note),
+        page: describe(page),
+        image: describe(image),
+      }),
+    )
+  }
+
   return result.ok
     ? NextResponse.json({ id: result.id, saved: true }, { status: 201 })
     : NextResponse.json({ error: result.error }, { status: result.status })
+}
+
+/** What arrived in a field, without saying what it said. A URL is the one
+ *  exception: it is the thing most likely to be malformed, it is already in
+ *  the row, and knowing it is a Safari page object rather than a string is
+ *  the whole diagnosis. */
+function describe(value: unknown): string {
+  if (value === null || value === undefined) return 'absent'
+  if (typeof value === 'string') return value === '' ? 'empty string' : `string(${value.length})`
+  if (value instanceof File) return `file(${value.type || 'no type'}, ${value.size}b)`
+  return typeof value
 }
 
 /** Constant-time compare so the token can't be recovered by timing the

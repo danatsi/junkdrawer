@@ -42,6 +42,10 @@ export async function saveLink(
 ): Promise<CaptureResult> {
   const url = parseUrl(rawUrl)
   if (!url) {
+    // The url is worth logging in full: it is the field most likely to arrive
+    // malformed, a caller sent it deliberately, and "invalid" is useless
+    // without seeing what was actually invalid about it.
+    console.warn('capture: url rejected ->', JSON.stringify(String(rawUrl ?? '')).slice(0, 200))
     return { ok: false, status: 400, error: 'Missing or invalid http(s) url' }
   }
   if (!isSupabaseConfigured()) {
