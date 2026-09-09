@@ -1,0 +1,74 @@
+.screen {
+  width: 100%;
+  max-width: 420px;
+  min-height: 100vh;
+  padding: 20px;
+  /* Centred rather than top-aligned like the other screens: there is one
+     control here, and putting it under the thumb on a phone matters more than
+     matching the list's top edge. */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+}
+
+.wordmark {
+  font-family: var(--font);
+  font-size: 20px;
+  font-weight: 500;
+  margin: 0 0 4px;
+}
+
+.blurb {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  margin: 0 0 24px;
+}
+
+.label {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  margin-bottom: 6px;
+}
+
+.input {
+  font-family: var(--font);
+  font-size: 16px; /* 16px or iOS zooms the page on focus. */
+  color: var(--color-text-primary);
+  background: transparent;
+  border: 0.5px solid var(--color-divider);
+  border-radius: 6px;
+  padding: 12px 10px;
+  margin-bottom: 18px;
+  outline: none;
+}
+
+.input:focus {
+  border-color: var(--color-accent);
+}
+
+.submit {
+  font-family: var(--font);
+  font-size: 14px;
+  padding: 12px;
+  border: none;
+  border-radius: 6px;
+  background: var(--color-accent);
+  color: var(--color-accent-bg);
+  cursor: pointer;
+}
+
+.submit:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.error {
+  font-size: 13px;
+  margin: 14px 0 0;
+  color: var(--color-text-primary);
+}

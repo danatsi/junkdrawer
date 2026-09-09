@@ -42,7 +42,18 @@ export function proxy(request: NextRequest) {
   }
 
   if (!isValidUnlockToken(request.cookies.get(UNLOCK_COOKIE)?.value)) {
-    return hiddenNotFound()
+    // An API caller gets the bodyless 404: a `fetch` has no use for an HTML
+    // login page, and following a redirect would hand it a 200 full of markup
+    // where it expected JSON.
+    if (pathname.startsWith('/api/')) return hiddenNotFound()
+
+    // A browser gets the password page. This used to be a 404 for everything,
+    // on the reasoning that a 404 doesn't advertise that anything is here —
+    // but it is also indistinguishable from a broken deploy when you are the
+    // one locked out, which is exactly how it read in practice. The trade is
+    // deliberate: the site now admits it exists, and the passphrase is what
+    // keeps it shut.
+    return NextResponse.redirect(new URL('/unlock', request.url))
   }
 
   return NextResponse.next()

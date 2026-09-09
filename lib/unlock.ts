@@ -4,9 +4,9 @@ import { NextResponse } from 'next/server'
 /**
  * The frontend gate (PLAN.md §5). The capture endpoint has its own bearer
  * token, but nothing protected the site itself — anyone with the URL could
- * read the drawer. This is the whole mechanism: visit `/unlock?k=<secret>`
- * once per device, get a signed cookie, and every other request is checked
- * against it by `proxy.ts`.
+ * read the drawer. This is the whole mechanism: enter the passphrase on
+ * `/unlock` once per device, get a signed cookie, and every other request is
+ * checked against it by `proxy.ts`.
  *
  * The cookie holds an HMAC of the secret rather than the secret itself, so a
  * cookie that leaks can't be replayed as an unlock link, and rotating
@@ -43,8 +43,9 @@ export function isValidUnlockToken(token: string | undefined): boolean {
   return equal(token, unlockToken())
 }
 
-/** Checks `?k=` against the secret. Both sides are hashed first so the compare
- *  is over two fixed-length digests and the secret's length doesn't leak. */
+/** Checks a submitted password against the secret. Both sides are hashed first
+ *  so the compare is over two fixed-length digests and the secret's length
+ *  doesn't leak. */
 export function isCorrectSecret(provided: string): boolean {
   if (!isUnlockConfigured()) return false
   return equal(sign(provided), sign(required()))

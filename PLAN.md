@@ -220,10 +220,16 @@ Spec §3.1 covers the *capture* endpoint (bearer token from the Shortcut) but no
 *site*. As written, anyone with the URL reads your saved links. Vercel's password protection is a paid
 feature, and a full auth provider is heavy for one user.
 
-**Proposal:** middleware over every route. Visit `/unlock?k=<APP_UNLOCK_SECRET>` once per device; it sets a
-signed, httpOnly, one-year cookie. No cookie → 404 (not 401 — a 404 doesn't advertise that something is there).
-Roughly 30 lines, no dependency, no login screen. Flagged here because it's a real hole, not because the
-mitigation is hard.
+**Built:** middleware (`proxy.ts`) over every route. Enter `APP_UNLOCK_SECRET` on `/unlock` once per
+device; it sets a signed, httpOnly, one-year cookie. No dependency, no auth provider.
+
+The first cut had no login screen at all — an `/unlock?k=<secret>` link, and a bodyless 404 for anything
+without the cookie, so that a locked site didn't advertise it was there. Two problems in practice: the
+404 is also what a broken deploy looks like, so being locked out was indistinguishable from an outage;
+and a secret in a URL ends up in history, referers and screenshots. Now a locked browser is redirected
+to a password page, and the secret is a five-word passphrase (~74 bits) submitted by POST. API routes
+still get the bodyless 404, since a `fetch` has no use for a login page. The site admits it exists; the
+passphrase is what keeps it shut.
 
 ---
 
