@@ -101,6 +101,10 @@ export async function enrich(link: EnrichTarget): Promise<void> {
     if (generated.clean_title && !scrapedTitle) update.title = generated.clean_title
     if (generated.summary) update.description = generated.summary
     update.tags = generated.tags
+    // Guarded rather than assigned outright, unlike `tags`: an empty tag list
+    // is a real answer ("nothing in the vocabulary fits"), an empty keyword
+    // list never is, so a thin retry mustn't wipe terms that already work.
+    if (generated.keywords.length) update.keywords = generated.keywords
 
     // 3. The watch sub-pipeline. An IMDb link resolved itself by id in 1b;
     //    everything else needs Gemini to have recognised a film or show, and
@@ -176,6 +180,7 @@ export async function enrichScreenshot(input: {
     if (generated.summary) update.description = generated.summary
     if (generated.extracted_text) update.extracted_text = generated.extracted_text
     update.tags = generated.tags
+    if (generated.keywords.length) update.keywords = generated.keywords
 
     if (generated.tags.includes('watch')) {
       const movie = await fetchMovieData(generated.clean_title)

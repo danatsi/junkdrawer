@@ -24,6 +24,10 @@ export interface Link {
   image_kind: 'photo' | 'icon' | null
   domain: string | null
   tags: string[]
+  /** Generated search vocabulary — the words you'd type to find this row,
+   *  in Hebrew and English whatever language the page was in. Never rendered;
+   *  see lib/search.ts for why substring matching on the title isn't enough. */
+  keywords: string[]
   status: LinkStatus
   imdb_rating: string | null
   trailer_url: string | null

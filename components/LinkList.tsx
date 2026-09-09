@@ -1,10 +1,11 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import NextLink from 'next/link'
 import { AnimatePresence } from 'motion/react'
 import { CORE_TAGS, type Link } from '@/lib/types'
+import { compileQuery, matchesQuery } from '@/lib/search'
 import { LinkRow } from './LinkRow'
 import { ScreenshotRow } from './ScreenshotRow'
 import { SwipeableRow } from './SwipeableRow'
@@ -79,24 +80,6 @@ export function groupIntoSections(links: Link[]): Section[] {
   for (const tag of SECTION_ORDER) add(tag, tag)
   add(OTHER_SECTION.key, OTHER_SECTION.label)
   return sections
-}
-
-/** Search matches title, domain, note, a screenshot's OCR'd text, and every
- *  tag — including the freeform ones that never get a chip, which is the main
- *  way to reach them. */
-function matchesQuery(link: Link, query: string): boolean {
-  const haystack = [
-    link.title,
-    link.domain,
-    link.note,
-    link.description,
-    link.extracted_text,
-    ...link.tags,
-  ]
-    .filter(Boolean)
-    .join(' ')
-    .toLowerCase()
-  return haystack.includes(query)
 }
 
 export function LinkList({ links }: { links: Link[] }) {
@@ -203,11 +186,13 @@ export function LinkList({ links }: { links: Link[] }) {
     setQuery('')
   }
 
-  const trimmedQuery = query.trim().toLowerCase()
+  // Compiled once per keystroke rather than once per row: tokenising and
+  // stemming the query is the expensive half, and it doesn't depend on the row.
+  const compiled = useMemo(() => compileQuery(query), [query])
   const visible = links
     .filter((l) => !archivedIds.has(l.id))
     .filter((l) => activeTag === ALL || l.tags.includes(activeTag))
-    .filter((l) => !trimmedQuery || matchesQuery(l, trimmedQuery))
+    .filter((l) => !compiled || matchesQuery(l, compiled))
 
   const sections = activeTag === ALL ? groupIntoSections(visible) : null
 
@@ -229,11 +214,11 @@ export function LinkList({ links }: { links: Link[] }) {
   // overrides the collapse state so a hit can't hide inside a shut section.
   // Shared with it so the two can't drift.
   const isSectionCollapsed = (section: Section) =>
-    !section.pinned && !trimmedQuery && collapsedSections.has(section.key)
+    !section.pinned && !compiled && collapsedSections.has(section.key)
 
   // Sections only exist on the all tab, and a search forces them all open, so
   // there's nothing to collapse in either of those cases.
-  const collapsibleKeys = trimmedQuery
+  const collapsibleKeys = compiled
     ? []
     : (sections ?? []).filter((section) => !section.pinned).map((section) => section.key)
   // Only rows actually on screen. A panel left open inside a section that was
@@ -290,7 +275,11 @@ export function LinkList({ links }: { links: Link[] }) {
               ref={searchRef}
               className={styles.searchField}
               type="search"
-              placeholder="Search titles, tags, notes"
+              // Typing Hebrew into an LTR field puts the caret and the
+              // punctuation on the wrong side; the rest of the app already
+              // leans on dir="auto" for exactly this.
+              dir="auto"
+              placeholder="Search in Hebrew or English"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.key === 'Escape' && closeSearch()}
@@ -340,7 +329,7 @@ export function LinkList({ links }: { links: Link[] }) {
       )}
 
       {visible.length === 0 ? (
-        <p className={styles.empty}>{emptyMessage(links.length, trimmedQuery, activeTag)}</p>
+        <p className={styles.empty}>{emptyMessage(links.length, query.trim(), activeTag)}</p>
       ) : sections ? (
         sections.map((section) => {
           const collapsed = isSectionCollapsed(section)

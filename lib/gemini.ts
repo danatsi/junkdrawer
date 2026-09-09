@@ -1,5 +1,6 @@
 import 'server-only'
 import { ApiError, GoogleGenAI, Type, type ContentListUnion } from '@google/genai'
+import { normalise } from './search'
 import { CORE_TAGS } from './types'
 import type { OgData } from './og'
 
@@ -16,6 +17,9 @@ export interface GeminiResult {
   clean_title: string
   summary: string
   tags: string[]
+  /** Bilingual search vocabulary — see `SEARCH_TERMS_PROPERTY` and
+   *  lib/search.ts. Stored, never displayed. */
+  keywords: string[]
   /** Only populated by the image path — OCR'd text from the screenshot. */
   extracted_text?: string
 }
@@ -43,6 +47,55 @@ const API_VERSION = 'v1'
  *  watch chain still fit inside the route's 60s budget. */
 const TIMEOUT_MS = 20_000
 
+/**
+ * The languages every row is made findable in. Hebrew and English because
+ * that's what gets typed into the search box; a page in either one has to
+ * answer to both (see lib/search.ts).
+ */
+const SEARCH_LANGUAGES = 'Hebrew and English'
+
+/** How many terms to ask for. Enough to cover a category word, its synonyms
+ *  and a brand in two languages; few enough that the model stays concrete
+ *  instead of padding the list with the whole semantic field. */
+const SEARCH_TERMS_TARGET = '8 to 14'
+
+/**
+ * The field that makes cross-language search possible at all. Shared by the
+ * link, image and re-index paths so all three produce the same vocabulary.
+ */
+const SEARCH_TERMS_PROPERTY = {
+  type: Type.ARRAY,
+  description:
+    `${SEARCH_TERMS_TARGET} short lowercase words someone might type months later to find ` +
+    `this again. Every concept must appear in BOTH ${SEARCH_LANGUAGES}, whatever language the ` +
+    'source is in. Include: the generic category word (jeans / מכנסיים), its everyday synonyms ' +
+    'and singular and plural forms (pants, trousers, denim, מכנס, ג\'ינס, גינס), the brand or ' +
+    'site name, and any distinguishing colour, material, cuisine or genre. ' +
+    'Single words or two-word phrases, no sentences, no duplicates.',
+  items: { type: Type.STRING },
+}
+
+/**
+ * The same instruction, in the prompt as well as in the schema description.
+ * Saying it twice is not belt-and-braces: asked only through the schema, the
+ * lite model answers in the source language alone about half the time, which
+ * is precisely the failure this whole feature exists to fix.
+ *
+ * The label differs because one prompt numbers its rules and the others
+ * bullet them.
+ */
+function searchTermsRule(label: string): string {
+  return [
+    `${label} ${SEARCH_TERMS_TARGET} lowercase words for finding this later. Every`,
+    `   concept must appear in BOTH ${SEARCH_LANGUAGES} — both, even when the source is`,
+    "   only in one of them. A Zara page written in English still needs מכנסיים, מכנס,",
+    "   ג'ינס and גינס alongside jeans, pants, trousers and denim; a Hebrew recipe needs",
+    '   chicken next to עוף. Plain category word first, then everyday synonyms, then the',
+    '   brand or site name, then the colour, material, cuisine or genre. Never "link",',
+    '   "page", "website" or the tag names themselves.',
+  ].join('\n')
+}
+
 const RESPONSE_SCHEMA = {
   type: Type.OBJECT,
   properties: {
@@ -67,9 +120,13 @@ const RESPONSE_SCHEMA = {
         'At most one extra specific lowercase tag (e.g. "pasta", "denim", "sci-fi"). ' +
         'Empty string if nothing specific applies.',
     },
+    // Last on purpose: the model has already committed to a title, a summary
+    // and a tag by the time it writes these, so the terms describe what it
+    // decided the thing is rather than leading that decision.
+    search_terms: SEARCH_TERMS_PROPERTY,
   },
-  required: ['clean_title', 'summary', 'tags', 'freeform_tag'],
-  propertyOrdering: ['clean_title', 'summary', 'tags', 'freeform_tag'],
+  required: ['clean_title', 'summary', 'tags', 'freeform_tag', 'search_terms'],
+  propertyOrdering: ['clean_title', 'summary', 'tags', 'freeform_tag', 'search_terms'],
 }
 
 /** The image schema adds OCR. Kept separate rather than making extracted_text
@@ -122,7 +179,7 @@ export async function generateMetadata(input: {
   note: string | null
   og: OgData
 }): Promise<GeminiResult> {
-  return withRetry(() => attempt(buildPrompt(input), RESPONSE_SCHEMA))
+  return toResult(await withRetry(() => attempt(buildPrompt(input), RESPONSE_SCHEMA)))
 }
 
 /**
@@ -143,10 +200,63 @@ export async function generateFromImage(input: {
       ],
     },
   ]
-  return withRetry(() => attempt(contents, IMAGE_RESPONSE_SCHEMA))
+  return toResult(await withRetry(() => attempt(contents, IMAGE_RESPONSE_SCHEMA)))
 }
 
-async function withRetry(run: () => Promise<GeminiResult>): Promise<GeminiResult> {
+/** Terms only. The re-index path (`/api/reindex`) has a row that was already
+ *  enriched before `keywords` existed, and re-running the whole pipeline over
+ *  it would re-scrape the page, re-upload the thumbnail and re-hit TMDb to
+ *  arrive back at the title it already has. */
+const SEARCH_TERMS_SCHEMA = {
+  type: Type.OBJECT,
+  properties: { search_terms: SEARCH_TERMS_PROPERTY },
+  required: ['search_terms'],
+}
+
+export async function generateSearchTerms(input: {
+  url: string
+  domain: string | null
+  title: string | null
+  description: string | null
+  note: string | null
+  tags: string[]
+  extracted_text: string | null
+}): Promise<string[]> {
+  const raw = await withRetry(() => attempt(buildSearchTermsPrompt(input), SEARCH_TERMS_SCHEMA))
+  return normaliseKeywords(raw.search_terms)
+}
+
+function buildSearchTermsPrompt(input: {
+  url: string
+  domain: string | null
+  title: string | null
+  description: string | null
+  note: string | null
+  tags: string[]
+  extracted_text: string | null
+}): string {
+  return [
+    'Something is already saved in a personal link drawer. Produce only the',
+    'search terms that would find it again.',
+    '',
+    `url: ${input.url}`,
+    input.domain && `domain: ${input.domain}`,
+    input.title && `title: ${input.title}`,
+    input.description && `summary: ${input.description}`,
+    input.note && `the person's own note: "${input.note}"`,
+    input.tags.length ? `tags: ${input.tags.join(', ')}` : null,
+    // Truncated: a full-page screenshot's OCR can run to thousands of
+    // characters, and the first few hundred are what says what it is.
+    input.extracted_text && `text in the image: ${input.extracted_text.slice(0, 600)}`,
+    '',
+    'Rules:',
+    searchTermsRule('- search_terms:'),
+  ]
+    .filter(Boolean)
+    .join('\n')
+}
+
+async function withRetry<T>(run: () => Promise<T>): Promise<T> {
   try {
     return await run()
   } catch (error) {
@@ -157,7 +267,9 @@ async function withRetry(run: () => Promise<GeminiResult>): Promise<GeminiResult
   }
 }
 
-async function attempt(contents: ContentListUnion, schema: object): Promise<GeminiResult> {
+/** The call itself. Returns the parsed JSON object and nothing more, so the
+ *  three callers can each read the fields they asked for. */
+async function attempt(contents: ContentListUnion, schema: object): Promise<RawResult> {
   const response = await getClient().models.generateContent({
     model: MODEL,
     contents,
@@ -176,14 +288,19 @@ async function attempt(contents: ContentListUnion, schema: object): Promise<Gemi
   // Schema-constrained, so this is well-formed JSON of the right shape — but
   // it's still parsed defensively, since a thrown error here would mark the
   // row `failed` and lose the scrape we already have.
-  const raw = JSON.parse(text) as {
-    clean_title?: unknown
-    summary?: unknown
-    tags?: unknown
-    freeform_tag?: unknown
-    extracted_text?: unknown
-  }
+  return JSON.parse(text) as RawResult
+}
 
+interface RawResult {
+  clean_title?: unknown
+  summary?: unknown
+  tags?: unknown
+  freeform_tag?: unknown
+  search_terms?: unknown
+  extracted_text?: unknown
+}
+
+function toResult(raw: RawResult): GeminiResult {
   const coreTags = Array.isArray(raw.tags)
     ? raw.tags.filter((t): t is string => typeof t === 'string')
     : []
@@ -193,6 +310,7 @@ async function attempt(contents: ContentListUnion, schema: object): Promise<Gemi
     clean_title: str(raw.clean_title),
     summary: str(raw.summary),
     tags: normaliseTags(coreTags, freeform),
+    keywords: normaliseKeywords(raw.search_terms),
     extracted_text: str(raw.extracted_text) || undefined,
   }
 }
@@ -220,9 +338,10 @@ function buildImagePrompt(note: string | null): string {
     '4. freeform_tag: at most one specific lowercase word for what this is.',
     '5. summary: under 20 words describing what the screenshot shows.',
     '6. extracted_text: every legible piece of text, verbatim, in reading order.',
-    '7. Write clean_title and summary in the language and script of the text in',
+    searchTermsRule('7. search_terms:'),
+    '8. Write clean_title and summary in the language and script of the text in',
     '   the image. Never transliterate it into Latin letters.',
-    '8. Never refuse. If the image is unclear, describe what you can see.',
+    '9. Never refuse. If the image is unclear, describe what you can see.',
     note
       ? `\nThe person's own note: "${note}"\n` +
         'Use it for the summary and the tags — it says why this was worth saving. ' +
@@ -249,6 +368,37 @@ export function normaliseTags(coreTags: string[], freeform: string): string[] {
     .trim()
   const out: string[] = [...core]
   if (extra && !out.includes(extra)) out.push(extra)
+  return out
+}
+
+/** Enough to hold both languages' worth of terms for a rich page, with a
+ *  ceiling so a model that decides to enumerate the dictionary can't turn one
+ *  row into a substring match for everything. */
+const MAX_KEYWORDS = 24
+const MAX_KEYWORD_LENGTH = 40
+
+/**
+ * Lowercased, de-duplicated and bounded. Duplicates are collapsed on their
+ * search-normalised form, so ג'ינס and גינס — which the prompt deliberately
+ * asks for both of — count as one term and only one survives; that costs
+ * nothing, because `lib/search.ts` normalises the query the same way and
+ * matches either spelling against whichever one was kept.
+ */
+export function normaliseKeywords(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return []
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const item of raw) {
+    if (typeof item !== 'string') continue
+    const term = item.trim().toLowerCase().slice(0, MAX_KEYWORD_LENGTH)
+    // Anything with no letter or digit in it can't be typed at, so it's noise.
+    if (!/[\p{L}\p{N}]/u.test(term)) continue
+    const key = normalise(term)
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(term)
+    if (out.length === MAX_KEYWORDS) break
+  }
   return out
 }
 
@@ -288,6 +438,7 @@ function buildPrompt({
     'Rules:',
     `- tags: choose from ${CORE_TAGS.join(', ')}. Usually exactly one. Omit rather than guess.`,
     '- freeform_tag: at most one specific lowercase word for what this actually is.',
+    searchTermsRule('- search_terms:'),
     '- clean_title: under 8 words, sentence case, no site name or marketing padding.',
     '- summary: under 20 words, one sentence, plain and factual.',
     // A Hebrew book page came back titled "achi lo eshet hayil". Latin letters
