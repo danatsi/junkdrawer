@@ -94,6 +94,42 @@ The `image` form field still exists and still takes a file, for the screenshot
 path and for anything that needs to push actual pixels. It just isn't how link
 capture works any more.
 
+## Keeping it in the repo
+
+The shortcut is the one part of capture that lives outside the codebase: built
+in a GUI, no diff, nothing to review, and reinstalling it means rebuilding it
+by hand. So `shortcuts/capture-web-page.plist` is the source of truth and the
+phone holds a copy.
+
+```bash
+npm run shortcut     # inject the token, sign, output to shortcuts/dist/
+```
+
+AirDrop the signed file to your phone, or open it on a Mac signed into the
+same account.
+
+**The committed plist has no token in it.** An exported shortcut carries the
+Authorization header verbatim, and this repo is public, so committing an
+export would republish the secret — the same mistake that burned the last
+token. The committed copy holds `__CAPTURE_TOKEN__`, the build injects the
+real value from `.env.local`, and `shortcuts/dist/` is gitignored. The build
+refuses to run if the placeholder is missing, which is what stops a build
+output being committed over the source.
+
+To pull changes back after editing on the phone: share the shortcut to iCloud,
+then
+
+```bash
+curl -s https://www.icloud.com/shortcuts/api/records/<id> \
+  | python3 -c "import json,sys;print(json.load(sys.stdin)['fields']['shortcut']['value']['downloadURL'])" \
+  | xargs curl -sL -o /tmp/s.shortcut
+plutil -convert xml1 /tmp/s.shortcut -o -   # readable; redact the token before committing
+```
+
+An iCloud-shared shortcut downloads as a plain binary plist. A shortcut
+exported straight from the app is an AEA archive and cannot be read back, so
+iCloud is the route that round-trips.
+
 ## Your token
 
 Read it out of `.env.local`, which is gitignored:

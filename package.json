@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "relock": "node scripts/relock.mjs",
-    "dev:mock": "MOCK_DATA=1 next dev"
+    "dev:mock": "MOCK_DATA=1 next dev",
+    "shortcut": "node scripts/build-shortcut.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.18.0",
