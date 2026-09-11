@@ -1,7 +1,10 @@
+/* Full-screen image, iOS-style: near-black scrim rather than the old warm
+   brown one, and the close control as a filled circular glyph in the corner,
+   which is how Photos and Mail dismiss a full-screen attachment. */
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgba(20, 16, 10, 0.82);
+  background: rgba(0, 0, 0, 0.92);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -10,21 +13,32 @@
 
 .close {
   position: absolute;
-  top: 20px;
-  right: 20px;
-  background: none;
-  border: none;
-  padding: 4px;
-  cursor: pointer;
-  color: var(--color-bg);
+  top: calc(env(safe-area-inset-top) + 12px);
+  right: 12px;
   display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ios-tap);
+  height: var(--ios-tap);
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  /* Its own fill rather than a token: this sits over an arbitrary photograph,
+     not over one of the app's backgrounds. */
+  background: rgba(120, 120, 128, 0.4);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: #FFFFFF;
+  cursor: pointer;
+}
+
+.close:active {
+  opacity: 0.6;
 }
 
 .image {
-  width: 82%;
-  max-width: 340px;
-  max-height: 80vh;
+  width: 100%;
+  max-width: 100%;
+  max-height: 88vh;
   object-fit: contain;
-  border-radius: 12px;
-  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.45);
 }

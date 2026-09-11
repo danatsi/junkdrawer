@@ -101,58 +101,86 @@ Opens WhatsApp (native app or web) with that text pre-filled in the share/contac
 
 ### 4.1 Visual direction
 
-Ink. A dark, neutral tray in which the thumbnails are the only colour. The content is
-other people's images, scraped from everywhere, so anything the interface tints competes
-with them — the app's job is to be the quietest thing on the screen.
+**The platform's own system, on a modern setting.** The app is used almost entirely as a
+home-screen PWA on a phone, sitting one swipe from Mail and Notes. A bespoke design system
+in that position doesn't read as considered, it reads as a website someone bookmarked. So
+the foundations are Apple's — system colours, the SF type scale, inset-grouped lists, the
+44pt touch floor — and the expressive layer is current rather than stock: oversized bold
+section titles, pill shapes throughout, generous whitespace.
 
-This replaced a warm-cream, serif-titled, terracotta-accented treatment. That combination
-is the single most recognisable "generated design" signature there is, and it read as
-templated rather than considered. Three of its habits went with it, and should not come
-back: tracked-out ALL-CAPS section labels, meta strings joined with middle dots, and a
-hairline rule under every row.
+This replaced two earlier directions, both recorded here because the reasons they lost
+still apply. First, a warm-cream/serif/terracotta treatment: the single most recognisable
+"generated design" signature there is. Then "Ink", a custom dark-only palette with IBM Plex
+type and dense borderless rows — better, but still a private system competing with the
+platform for no benefit the person using it could name.
 
-**Color tokens:**
-| Token | Value | Use |
-|---|---|---|
-| Background | `#16171A` | page background |
-| Surface | `#232428` | raised chrome — chips, tag pills, score badges, thumbnail placeholder |
-| Text primary | `#ECECEE` | titles |
-| Text secondary | `#8A8B93` | meta, descriptions, icons |
-| Divider | `#232428` | retained for the few edges that still need one; rows no longer use it |
-| Accent | `#ECECEE` | not a hue — the ink inverted. Active chip, score, the one tappable link in a panel |
-| Accent background | `#16171A` | what sits on top of accent |
-| Thumbnail placeholder | `#232428` | |
+Two habits from the first are still banned: tracked-out ALL-CAPS labels, and meta strings
+joined with middle dots.
 
-There is deliberately no accent *hue*. On a dark ground, full-contrast ink does the job a
-coloured accent does on a light one, and it leaves the thumbnails as the only saturated
-thing in the list.
+**Colour.** Apple's system palette, defined in `app/globals.css`, in both appearances —
+following the device is the most app-like thing an interface here does. Backgrounds are the
+*grouped* set (the darker/greyer tone behind the screen, the lighter one in the row cards).
+Labels are the translucent label colours rather than flat greys, so text stays readable over
+a thumbnail. Values are never invented: if Apple publishes one, use theirs.
 
-**Typography:**
-- One family, IBM Plex Sans Hebrew, for everything. Hierarchy comes from weight and size,
-  not from a second face.
-- One family because the list is bilingual. Pairing a Latin family with a Hebrew one behind
-  it in the stack renders each script in a face designed for it, but the two never agree on
-  weight: Hebrew comes out visibly thinner than Latin at the same `font-weight`, and fixing
-  that needs a per-script weight, which no single CSS declaration can express. Plex draws
-  both scripts as one system, so a mixed title is one voice and `font-weight: 500` means the
-  same thing on either side of it.
-- A Hebrew serif was tried for titles (Frank Ruhl Libre) and rejected: at 15px it reads dark
-  and cramped, and Hebrew publishing doesn't lean on serifs at UI sizes the way Latin does.
-- Titles: 15.5px / 500, tracking -0.011em. Meta: 12px. Section names: 12.5px / 500, sentence
-  case.
-- Titles and body text carry `dir="auto"`, which takes the direction from the string's own
-  first strong character — per string, because the list is mixed. Alignment is pinned left
-  regardless, so an RTL title stays with its thumbnail instead of drifting to the far edge
-  while the meta line under it stays put; only the ordering inside the line flips.
+Tint discipline, which is the part that needs saying:
+- **systemBlue** is every actionable control — bar buttons, Undo, Try again, Collapse all.
+- **systemRed** means one thing only: the delete action. No error text, no failed-row state,
+  no generated thumbnail may use it.
+- **systemYellow** marks a score, and nothing else.
+- Generated monogram tiles rotate through six system hues (red excluded, per above). The
+  thumbnails are still the only saturated thing in a row.
 
-**Layout:**
-- Dense list rows, left-aligned. No card wrapper, no shadows, no rounded-card-grid treatment.
-- Rows are separated by space, not by a rule. 46px thumbnails at 9px radius; chips and tag
-  pills share that radius family so the chrome reads as one set of shapes.
-- A row's tag is a pill rather than a word after a middle dot — the shape says "category"
-  without spending a separator glyph on saying it. Row *state* ("adding details", "couldn't
-  fetch details") stays plain text, because it isn't a category.
-- Filter bar: horizontal scrollable tag chips at the top (`all`, `shopping`, `watch`, `recipe`, ...). Active chip filled with the accent color; inactive chips are outlined/muted.
+**Typography.** SF, via the system font stack — no webfont, so nothing to download and the
+same face as every other app on the phone. Sizes are the iOS text styles by name
+(`--text-body` 17pt, `--text-subhead` 15pt, `--text-footnote` 13pt, `--text-large-title`
+34pt), in `rem` so OS-level text scaling carries through.
+
+This also settles the bilingual problem the two previous directions were built around. The
+objection to a two-family stack was that a Latin family with a Hebrew one behind it never
+agrees on weight. SF doesn't have that failure: SF Hebrew is drawn as part of the same
+family, so `font-weight: 600` means one thing across a mixed title. Off Apple platforms this
+lands on the platform's own UI face, which is the intent.
+
+Titles and body text carry `dir="auto"`, which takes direction from the string's own first
+strong character — per string, because the list is mixed. Alignment is pinned left
+regardless, so an RTL title stays with its thumbnail instead of drifting to the far edge
+while the meta line under it stays put; only the ordering inside the line flips.
+
+**Layout.**
+- **Inset-grouped lists.** Each section's rows sit in one rounded card inset 16pt from both
+  edges. The radius is 18px rather than Apple's 10pt: the reason to draw a rounded container
+  is the shape, and 10pt on a 16pt inset reads as a square with the corners filed off.
+- **Separators** are 0.5px hairlines between rows, inset to the title's leading edge so the
+  thumbnails run as one column, and absent on a section's last row so no rule crosses a
+  rounded corner. They belong to the row, not the card, so a swiped row takes its separator
+  with it the way iOS does.
+- **Rows** are 44px thumbnails at 13px radius, title at body size clamped to two lines. One
+  line was tried first and rejected: these titles carry the identifying part at the *end*
+  ("חלה מתוקה של שישי - 180C, 40 דקות"), and a single line cut most of them mid-word. Two
+  keeps rows to two possible heights, which is what the uniformity was for.
+- **Section headers** are 22px/700 at full contrast, with the count in a pill and the
+  collapse chevron on the trailing edge. They were 13px grey first, which made a header
+  quieter than the rows under it — so the groups did no work and the list read as one
+  undifferentiated run.
+- **Filter tabs** are pills that scroll horizontally, with a single indicator that slides
+  between them (motion's `layoutId`), so the filter reads as one object changing position.
+  A five-segment iOS segmented control was tried and rejected: at phone width each segment
+  got ~60px, which truncated "shopping" and fixed the filter to exactly the tags that fit.
+  The trailing edge of the row is masked to a fade, because a pill sliced off square by the
+  screen edge reads as a layout bug rather than as "there is more this way".
+- **Search** is always on screen under the large title, as a pilled filled field with the
+  glyph inside it, a clear button and a Cancel — not hidden behind an icon.
+- **Navigation** is a large title in the scroll content plus a sticky translucent bar that
+  takes over the title once the large one has left. Materials are weighted towards opaque so
+  they still read as a bar where `backdrop-filter` isn't composited.
+- A row's tag is a pill rather than a word after a middle dot. Row *state* ("adding
+  details", "couldn't fetch details") stays plain text, because it isn't a category. Below
+  360px the tag pill is dropped so the domain isn't truncated to make room for something the
+  section header already said.
+- Safe-area insets everywhere (`viewport-fit=cover`), and 44pt minimum targets: the icon
+  buttons carry a full 44×44 with negative margins so the target is right without the row
+  growing to fit two of them.
 
 ### 4.2 Row anatomy (collapsed — default state for every link type, including movies/TV)
 
@@ -161,7 +189,7 @@ thing in the list.
              domain · tag (sans, 12px, secondary/accent)
 ```
 
-- Thumbnail: 40x40px, 6px radius, placeholder fill until a real image loads.
+- Thumbnail: 44x44px, 13px radius, placeholder fill until a real image loads.
 - Score badge (watch-tagged links, and read-tagged books): small pill, accent-tinted background, star icon + number, sits inline next to the title — the *only* way a scored row differs from others at rest. A movie/TV row's number is the IMDb rating; a book's is the reassurance score (§3.3). No description or trailer link is visible until expanded.
 - Action column (right side, always two icons, no overflow/kebab menu): WhatsApp icon (direct tap → builds and opens the wa.me link) and a chevron (direct tap → toggles the expand panel). Both are independent, single-purpose taps — no intermediate menu for either.
 
@@ -275,7 +303,11 @@ One iOS-specific quirk: passing a non-empty `title` alongside `files` has been r
 
 ## 7. Accompanying frontend code
 
-Code implementing section 4 ships alongside this spec, in `frontend/`:
+Code implementing section 4 ships alongside this spec, in `frontend/`.
+
+**These files describe the superseded "Ink" direction** (see §4.1), `mock.html` included. They
+are kept as a record of the interactions, which did carry over; for anything to do with colour,
+type or shape the live source is `app/globals.css` and the component stylesheets.
 
 - `tokens.css` — the color/font tokens from 4.1 as CSS custom properties.
 - `Icons.jsx` — inline SVG chevron/star/WhatsApp icons (no external icon package dependency).
@@ -294,14 +326,17 @@ Not yet implemented in code (tracked in Open Questions above): swipe-to-archive,
 - Gemini Flash (free tier) for tagging/title/summary generation, using the user's note as primary signal when present. Confirmed free-tier quota is far beyond expected volume (~3 links + 1–2 screenshots/day).
 - TMDb + OMDb chained for movie/TV enrichment (description + trailer from TMDb, IMDb rating specifically from OMDb via TMDb's imdb_id).
 - WhatsApp share for links is a client-side `wa.me` link — no backend or API key involved. For screenshots, sharing the actual image requires the Web Share API instead (see 5.6) — a different mechanism, one extra tap, not unifiable with `wa.me`.
-- Visual direction: ink — dark neutral ground, one bilingual sans, no accent hue, dense list rows
-  (not cards/grid). Replaced a warm-cream/serif/terracotta treatment that read as templated.
+- Visual direction: the platform's own system on a modern setting — iOS system colours in both
+  appearances, SF via the system stack, inset-grouped cards, pills throughout, oversized bold
+  section titles. Replaced "Ink" (a custom dark-only system), which replaced a
+  warm-cream/serif/terracotta treatment that read as templated. §4.1 keeps the reasons both lost.
 - All link types collapsed by default, including movies/TV — score badge is the only rest-state difference. Books get the same badge, scored by taste rather than looked up (§3.3).
 - Row body opens the link; chevron expands details; WhatsApp is a direct button — no kebab/overflow menu anywhere in the row.
 - Row titles come from the page itself, not the model. The scrape's title with the site chrome cut off keeps a Hebrew page in Hebrew; Gemini only names a row when the scrape was unusable, and still owns tags and the summary either way.
-- One type family (IBM Plex Sans Hebrew) covers both scripts, so Hebrew and Latin match in weight by
-  construction rather than by tuning. Two-family stacks were tried twice and both times the scripts
-  disagreed on weight. Text carries `dir="auto"` for ordering, with alignment pinned left.
+- SF via the system font stack covers both scripts: SF Hebrew is part of the same family, so Hebrew
+  and Latin match in weight by construction and there's no webfont to download. This is what retired
+  IBM Plex Sans Hebrew, itself chosen because two-family stacks were tried twice and both times the
+  scripts disagreed on weight. Text carries `dir="auto"` for ordering, with alignment pinned left.
 - Swipe-to-archive sets `draggable={false}` on every link and image in a row and swallows the click
   that follows a drag. Without the first the browser's native link drag eats the gesture; without the
   second the release opens the link you just archived.

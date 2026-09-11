@@ -1,173 +1,397 @@
 .screen {
   width: 100%;
-  max-width: 420px;
+  /* Wider than the old 420px: an inset-grouped list is full-bleed on a phone,
+     and this only caps it on a desktop browser where a phone-width column
+     stranded in the middle of a monitor looks like a mistake. */
+  max-width: 560px;
   min-height: 100vh;
+  min-height: 100dvh;
+  /* The list scrolls under the status bar and over the home indicator, so both
+     ends pad themselves out of the way. */
+  padding-bottom: calc(32px + env(safe-area-inset-bottom));
 }
 
-.header {
-  padding: 20px 20px 14px;
-}
+/* --- Navigation bar (HIG: large title) ---------------------------------- */
 
-.wordmark {
-  font-size: 20px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  margin: 0 0 16px;
-}
-
-.chips {
+/* The compact bar that takes over once the large title has scrolled away.
+   Sticky rather than fixed so it participates in the layout, translucent so
+   the list reads as passing behind it. */
+.navBar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
   display: flex;
+  align-items: center;
   gap: 8px;
-  overflow-x: auto;
-  padding-bottom: 4px;
+  /* Pulled in by half the difference between the 44pt target and the glyph
+     inside it, so the glyph — not the edge of its hit area — lands on the
+     16pt margin the rest of the screen is aligned to. */
+  padding: env(safe-area-inset-top) calc(var(--ios-gutter) - 11px) 0;
+  min-height: calc(env(safe-area-inset-top) + var(--ios-tap));
+  background: var(--ios-material-bar);
+  /* The iOS bar material. saturate() is what keeps colour showing through the
+     blur instead of going grey. */
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  /* A hairline, and only once the bar is doing its job — an unscrolled bar
+     has nothing to divide. */
+  box-shadow: inset 0 -0.5px 0 transparent;
+  transition: box-shadow 0.2s ease;
 }
 
-.chip {
-  font-family: var(--font);
-  font-size: 12.5px;
-  padding: 5px 11px;
-  /* Squared off rather than a pill: the thumbnails and the tag chips share
-     this radius family, so the chrome reads as one set of shapes. */
-  border-radius: 8px;
-  white-space: nowrap;
-  cursor: pointer;
-  border: none;
-  background: var(--color-surface);
-  color: var(--color-text-secondary);
+.navBarScrolled {
+  box-shadow: inset 0 -0.5px 0 var(--ios-separator);
 }
 
-.chipActive {
-  background: var(--color-accent);
-  color: var(--color-accent-bg);
-  font-weight: 500;
-}
-
-.empty {
-  padding: 40px 20px;
-  font-size: 13px;
-  color: var(--color-text-secondary);
-  line-height: 1.6;
-}
-
-.headerTop {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.headerTop .wordmark {
+/* 17pt semibold, centred, and cross-faded with the large title below it. */
+.navTitle {
+  flex: 1;
+  min-width: 0;
   margin: 0;
-}
-
-.headerActions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-/* Right-aligned to the same edge as the section rows, so it reads as
-   belonging to them rather than to the header above. */
-.listActions {
-  display: flex;
-  justify-content: flex-end;
-  padding: 0 20px 6px;
-}
-
-.collapseAll {
-  font-family: var(--font);
-  font-size: 12px;
-  padding: 0 2px;
-  border: none;
-  background: none;
-  color: var(--color-text-secondary);
-  cursor: pointer;
+  text-align: center;
+  font-size: var(--text-headline);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ios-label);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  overflow: hidden;
   white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
-.searchToggle {
-  background: none;
-  border: none;
-  padding: 4px;
-  cursor: pointer;
-  color: var(--color-text-secondary);
-  display: flex;
+.navTitleVisible {
+  opacity: 1;
 }
 
-.searchBar {
+/* Balances the trailing button so the title is centred in the whole bar
+   rather than in what's left over beside it. */
+.navSpacer {
+  flex: none;
+  width: var(--ios-tap);
+}
+
+/* A bar button item: tinted text or glyph, no fill, no border, 44pt of
+   touchable area around a much smaller glyph. */
+.barButton {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 16px;
+  justify-content: center;
+  flex: none;
+  width: var(--ios-tap);
+  height: var(--ios-tap);
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--ios-blue);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.barButton:active {
+  opacity: 0.4;
+}
+
+/* The large title itself, in the scroll content rather than in the bar — it
+   is the first thing in the list, and it leaves as you scroll. */
+.largeTitle {
+  margin: 0;
+  padding: 4px var(--ios-gutter) 8px;
+  font-size: var(--text-large-title);
+  font-weight: 700;
+  letter-spacing: 0.011em;
+  line-height: 1.2;
+  color: var(--ios-label);
+}
+
+/* --- Search field (HIG: search bar) ------------------------------------- */
+
+.searchRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 var(--ios-gutter) 8px;
 }
 
 .searchField {
+  position: relative;
   flex: 1;
   min-width: 0;
-  font-family: var(--font);
-  font-size: 13px;
-  color: var(--color-text-primary);
-  background: transparent;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 14px;
+  /* Pilled, like the tabs and the badges — one shape language across the
+     screen, which is what keeps it from looking like two designs stacked. */
+  border-radius: var(--radius-pill);
+  background: var(--ios-fill-quaternary);
+  color: var(--ios-label-secondary);
+}
+
+.searchInput {
+  flex: 1;
+  min-width: 0;
   border: none;
-  border-bottom: 0.5px solid var(--color-divider);
-  padding: 6px 0;
+  background: none;
   outline: none;
+  font-size: var(--text-body);
+  color: var(--ios-label);
+  /* Safari draws its own rounded box and a clear button for type=search. */
+  appearance: none;
+  -webkit-appearance: none;
 }
 
-.searchField:focus {
-  border-bottom-color: var(--color-accent);
+.searchInput::-webkit-search-cancel-button {
+  display: none;
 }
 
-.searchField::placeholder {
-  color: var(--color-text-secondary);
-  opacity: 0.7;
+.searchInput::placeholder {
+  color: var(--ios-label-secondary);
 }
 
-/* Section headers sit in the rows' own 20px gutter, so grouping reads as
-   breaks in one list rather than a stack of cards. The break is the space
-   above them; there is no rule to draw it. */
+/* The glyph inside the field, not a button. */
+.searchGlyph {
+  display: flex;
+  flex: none;
+  color: var(--ios-label-secondary);
+}
+
+/* Clear: a filled grey circle with a cross, inside the trailing edge. */
+.searchClear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--ios-label-tertiary);
+  color: var(--ios-grouped-bg-elevated);
+  cursor: pointer;
+}
+
+/* Appears only while searching, and is text rather than a glyph — the iOS
+   search bar's own Cancel. */
+.searchCancel {
+  flex: none;
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: var(--text-body);
+  color: var(--ios-blue);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* --- Filter tabs -------------------------------------------------------- */
+
+/* Pills, scrolling horizontally, rather than the five-segment control that
+   was here first. Two things were wrong with that control: five segments at
+   phone width left each one about 60px, which truncated "shopping" and would
+   truncate anything added later; and it fixed the filter to exactly the tags
+   that fit. Pills size to their own label and simply scroll, so a sixth tag
+   costs nothing.
+   The soft full radius is also the shape everything else in the list now
+   shares — the badges, the search field, the thumbnails. */
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 26px;
+  padding: 2px var(--ios-gutter) 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  /* Snappier than free scrolling for a short row that mostly fits. */
+  scroll-snap-type: x proximity;
+  /* Five pills don't fit a phone, and a pill sliced off square by the edge of
+     the screen reads as a layout bug rather than as "there is more this way".
+     Fading the last few pixels says it scrolls without spending a control on
+     saying so. */
+  mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 28px), transparent 100%);
+  -webkit-mask-image: linear-gradient(
+    to right,
+    #000 0,
+    #000 calc(100% - 28px),
+    transparent 100%
+  );
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  position: relative;
+  flex: none;
+  scroll-snap-align: start;
+  /* 38px is under the 44pt floor, but the row of pills is 44px tall with its
+     padding and each pill's target extends to fill it. */
+  height: 38px;
+  padding: 0 17px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: var(--ios-fill-quaternary);
+  font-family: inherit;
+  font-size: var(--text-subhead);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ios-label-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  /* The tags are stored and searched lowercase; a control label is
+     capitalised. Done in CSS so only the display changes. */
+  text-transform: capitalize;
+  transition: color 0.2s ease;
+}
+
+.tab:active {
+  transform: scale(0.96);
+}
+
+.tabActive {
+  /* Full contrast, inverted — the ink itself rather than a tint. It reads at
+     a glance from across the row, which a 0.5px-bordered segment does not. */
+  color: var(--ios-grouped-bg-elevated);
+}
+
+/* The moving part: one pill that slides between tabs instead of each tab
+   fading its own background in and out. It's the same element throughout
+   (motion's layoutId), so the filter reads as one object changing position. */
+.tabPill {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: var(--radius-pill);
+  background: var(--ios-label);
+}
+
+.tabLabel {
+  position: relative;
+  z-index: 1;
+}
+
+/* --- Section headers ---------------------------------------------------- */
+
+/* Oversized and full contrast, which is the whole change from the 13px grey
+   label that was here: at that size a header was quieter than the rows under
+   it, so the list read as one undifferentiated run and the groups did no
+   work. A section title should be the thing you find when you're scanning. */
 .sectionHeader {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 18px 20px 7px;
+  gap: 8px;
+  padding: 0 var(--ios-gutter) 10px;
   border: none;
   background: transparent;
-  font-family: var(--font);
+  font-family: inherit;
   text-align: left;
   cursor: pointer;
-  /* Secondary, not accent: the accent is reserved for status (spec §4.1), and
-     a header is not a status. */
-  color: var(--color-text-secondary);
+  color: var(--ios-label);
 }
 
-/* The pinned "adding details" section has nothing to toggle. */
 .sectionHeaderStatic {
   cursor: default;
 }
 
-/* Sentence case at reading size. A tracked-out caps label is louder than the
-   rows it introduces, which is backwards — the section name is the least
-   important text on the screen. */
 .sectionName {
-  font-size: 12.5px;
-  font-weight: 500;
+  font-size: var(--text-title-2);
+  font-weight: 700;
+  /* Large bold type at default tracking reads loose; this is the same
+     optical correction the large title gets. */
+  letter-spacing: -0.02em;
 }
 
+/* A pill, so the number is a count rather than a word in the title. */
 .sectionCount {
-  font-size: 11px;
-  opacity: 0.55;
+  padding: 1px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--ios-fill-quaternary);
+  font-size: var(--text-footnote);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ios-label-secondary);
 }
 
+/* Pushed to the trailing edge rather than crowded against the title, so the
+   title starts on the same line as every row's thumbnail below it. */
 .sectionChevron {
   display: flex;
+  margin-left: auto;
+  color: var(--ios-label-tertiary);
   transition: transform 0.25s ease;
 }
 
-/* Down when open, right when closed — the row chevrons rotate the other way
-   (0 -> 180) because they start closed. */
+/* Down when open, trailing when closed. */
 .sectionChevronClosed {
   transform: rotate(-90deg);
+}
+
+/* --- The grouped section itself ----------------------------------------- */
+
+/* Generous, because the headers are large now: a big title needs air above it
+   or it looks welded to the group before it. */
+.section {
+  margin-bottom: 34px;
+}
+
+/* The card every row in a section sits inside: inset from both edges, one
+   continuous corner radius, clipping the rows so the first and last pick the
+   rounding up from their container rather than each drawing their own. The
+   clip is also what keeps a swiped row's action tray inside the group. */
+.group {
+  margin: 0 var(--ios-gutter);
+  border-radius: var(--ios-radius-group);
+  background: var(--ios-grouped-bg-elevated);
+  overflow: hidden;
+}
+
+/* The hairlines between rows belong to the rows, not to this container — see
+   SwipeableRow.module.css, where the row that moves under a swipe takes its
+   separator with it the way iOS does. */
+
+/* --- Misc --------------------------------------------------------------- */
+
+.listActions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 var(--ios-gutter) 10px;
+}
+
+.collapseAll {
+  padding: 4px 2px;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: var(--text-footnote);
+  color: var(--ios-blue);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.collapseAll:active {
+  opacity: 0.4;
+}
+
+.empty {
+  padding: 56px var(--ios-gutter);
+  text-align: center;
+  font-size: var(--text-subhead);
+  color: var(--ios-label-secondary);
+  line-height: 1.5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .navBar,
+  .navTitle,
+  .sectionChevron,
+  .tab {
+    transition: none;
+  }
+
+  .tab:active {
+    transform: none;
+  }
 }

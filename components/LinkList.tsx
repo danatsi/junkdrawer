@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import NextLink from 'next/link'
-import { AnimatePresence } from 'motion/react'
+import { AnimatePresence, motion } from 'motion/react'
 import { CORE_TAGS, type Link } from '@/lib/types'
 import { compileQuery, matchesQuery } from '@/lib/search'
 import { LinkRow } from './LinkRow'
@@ -32,9 +32,21 @@ const POLL_BUDGET_MS = 120_000
  */
 const SECTION_ORDER = [...CORE_TAGS] as const
 
-/** Keys are ids and CSS selectors as well as labels, hence the split. */
-const PENDING_SECTION = { key: 'pending', label: 'adding details' } as const
-const OTHER_SECTION = { key: 'other', label: 'everything else' } as const
+/** Keys are ids and CSS selectors as well as labels, hence the split. The
+ *  labels are sentence case because they're phrases; a tag's own label is
+ *  capitalised where it's used as one (see `capitalise`). */
+const PENDING_SECTION = { key: 'pending', label: 'Adding details' } as const
+const OTHER_SECTION = { key: 'other', label: 'Everything else' } as const
+
+/** The spring the sliding tab pill rides on. Short and slightly damped —
+ *  quick enough to keep up with a series of taps, soft enough to read as one
+ *  object moving rather than a background snapping on. */
+const TAB_SPRING = { type: 'spring', stiffness: 520, damping: 38 } as const
+
+/** Tags are stored lowercase; as a section title one is a proper label. */
+function capitalise(word: string): string {
+  return word.charAt(0).toUpperCase() + word.slice(1)
+}
 
 interface Section {
   key: string
@@ -77,7 +89,7 @@ export function groupIntoSections(links: Link[]): Section[] {
   }
 
   add(PENDING_SECTION.key, PENDING_SECTION.label, true)
-  for (const tag of SECTION_ORDER) add(tag, tag)
+  for (const tag of SECTION_ORDER) add(tag, capitalise(tag))
   add(OTHER_SECTION.key, OTHER_SECTION.label)
   return sections
 }
@@ -99,17 +111,27 @@ interface Pending {
  */
 async function destroy(id: string, { keepalive = false } = {}): Promise<void> {
   try {
-    await fetch(`/api/links/${id}`, { method: 'DELETE', keepalive })
+    const response = await fetch(`/api/links/${id}`, { method: 'DELETE', keepalive })
+    // `fetch` rejects on a network failure and nothing else, so a server that
+    // refused — a 404 from the site gate, a 500 from a bad key — arrives here
+    // looking exactly like success. Unlogged, the two were indistinguishable:
+    // the row was gone from the list either way and came back on the next load.
+    if (!response.ok) console.error(`Could not delete link ${id}: ${response.status}`)
   } catch {
     // Same reasoning as a failed status write: the row has already left the
     // list, and the next load is a better place to disagree than mid-toast.
-    console.error('Could not delete link')
+    console.error(`Could not delete link ${id}: request failed`)
   }
 }
 
 export function LinkList({ links }: { links: Link[] }) {
   const [activeTag, setActiveTag] = useState<string>(ALL)
-  const [searchOpen, setSearchOpen] = useState(false)
+  // Whether the large title has started to leave, which is what hands the
+  // title over to the compact bar (HIG: large titles collapse on scroll).
+  const [scrolled, setScrolled] = useState(false)
+  // Focus alone reveals Cancel, before anything has been typed — the iOS
+  // search bar offers the way out as soon as it takes the keyboard.
+  const [searchActive, setSearchActive] = useState(false)
   const [query, setQuery] = useState('')
   // Swiped-away rows are tracked by id and filtered out of the server list
   // rather than copied into state. The server list stays the single source of
@@ -128,6 +150,19 @@ export function LinkList({ links }: { links: Link[] }) {
   // Collapsed rather than expanded ids: the default is open, so an empty set
   // is the default state and a new category doesn't arrive collapsed.
   const [collapsedSections, setCollapsedSections] = useState<ReadonlySet<string>>(new Set())
+  // Rows swiped away as deletes whose request hasn't gone out yet.
+  //
+  // A ref rather than state, because the undo window used to be held by a
+  // timer inside the toast, and every path that took the toast away took the
+  // request with it: a second swipe replaced `pending` and cleared the first
+  // row's timer, and moving to another page in the app unmounted the list
+  // without firing `pagehide`. Either way the row was gone from the list and
+  // still sitting in the table. Now the hold lives here, outside the render
+  // that owns the toast, and every path that closes the window flushes it.
+  //
+  // Taking the id back out of the set is what claims the send, so a flush that
+  // races another one — the timer against the tab closing — still sends once.
+  const unsentDeletes = useRef<Set<string>>(new Set())
   const searchRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
 
@@ -155,9 +190,15 @@ export function LinkList({ links }: { links: Link[] }) {
     // budget instead of inheriting the tail of the previous one.
   }, [pendingCount, router])
 
+  // Passive, and writes a boolean rather than the offset: React bails out of
+  // the re-render while the answer is unchanged, so this costs nothing for the
+  // length of a scroll.
   useEffect(() => {
-    if (searchOpen) searchRef.current?.focus()
-  }, [searchOpen])
+    const onScroll = () => setScrolled(window.scrollY > 24)
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
 
   const setStatus = useCallback(async (id: string, status: 'unread' | 'done') => {
     try {
@@ -173,19 +214,28 @@ export function LinkList({ links }: { links: Link[] }) {
     }
   }, [])
 
+  const flushDelete = useCallback((id: string, options?: { keepalive?: boolean }) => {
+    if (unsentDeletes.current.delete(id)) void destroy(id, options)
+  }, [])
+
   const remove = useCallback(
     (link: Link, action: SwipeAction) => {
       setRemovedIds((current) => new Set(current).add(link.id))
       // The tray goes with the row. Left set, it would reopen under the row
       // that undo puts back.
       setSwipedId(null)
+      // This swipe takes the toast off whatever row had it, and the toast is
+      // the only way back — so a delete that row was still holding is due now,
+      // whether this swipe is a delete or an archive.
+      if (pending?.action === 'delete') flushDelete(pending.link.id)
       setPending({ link, action })
       // An archive is written straight away because it's reversible either
       // way: the row is still in the table and undo just sets it back. A
       // delete isn't sent at all until the undo window closes — see `commit`.
       if (action === 'archive') void setStatus(link.id, 'done')
+      else unsentDeletes.current.add(link.id)
     },
-    [setStatus],
+    [pending, setStatus, flushDelete],
   )
 
   const undo = useCallback(() => {
@@ -198,25 +248,34 @@ export function LinkList({ links }: { links: Link[] }) {
     setPending(null)
     if (pending.action === 'archive') void setStatus(pending.link.id, 'unread')
     // Undoing a delete is nothing more than never having sent it.
+    else unsentDeletes.current.delete(pending.link.id)
   }, [pending, setStatus])
 
   /** The undo window closed: whatever was being held back now happens. */
   const commit = useCallback(() => {
-    if (pending?.action === 'delete') void destroy(pending.link.id)
+    if (pending?.action === 'delete') flushDelete(pending.link.id)
     setPending(null)
-  }, [pending])
+  }, [pending, flushDelete])
 
   // The row is gone from the list the moment it's swiped, but the request that
-  // makes that true is five seconds behind it — so a tab closed inside the
-  // window would resurrect a row the person watched leave. Sent on the way out
-  // instead, with `keepalive` so it survives the page being torn down.
+  // makes that true is five seconds behind it — so anything that ends this
+  // component inside the window would resurrect a row the person watched
+  // leave. Both ways out are covered, because they are genuinely different
+  // events: closing the tab fires `pagehide` and never unmounts, while moving
+  // to another page in the app unmounts and fires no `pagehide` at all.
+  //
+  // `keepalive` on both, since a request begun as the document is torn down
+  // needs to outlive it, and it costs nothing when the page survives.
   useEffect(() => {
-    if (pending?.action !== 'delete') return
-    const id = pending.link.id
-    const flush = () => void destroy(id, { keepalive: true })
-    window.addEventListener('pagehide', flush)
-    return () => window.removeEventListener('pagehide', flush)
-  }, [pending])
+    const flushAll = () => {
+      for (const id of [...unsentDeletes.current]) flushDelete(id, { keepalive: true })
+    }
+    window.addEventListener('pagehide', flushAll)
+    return () => {
+      window.removeEventListener('pagehide', flushAll)
+      flushAll()
+    }
+  }, [flushDelete])
 
   const toggleSection = useCallback((key: string) => {
     setCollapsedSections((current) => {
@@ -236,8 +295,9 @@ export function LinkList({ links }: { links: Link[] }) {
   }, [])
 
   function closeSearch() {
-    setSearchOpen(false)
+    setSearchActive(false)
     setQuery('')
+    searchRef.current?.blur()
   }
 
   // Compiled once per keystroke rather than once per row: tokenising and
@@ -312,66 +372,88 @@ export function LinkList({ links }: { links: Link[] }) {
 
   return (
     <main className={styles.screen}>
-      <div className={styles.header}>
-        <div className={styles.headerTop}>
-          <h1 className={styles.wordmark}>Junk Drawer</h1>
-          {!searchOpen && (
-            <div className={styles.headerActions}>
-              <button
-                type="button"
-                className={styles.searchToggle}
-                aria-label="Search links"
-                onClick={() => setSearchOpen(true)}
-              >
-                <SearchIcon />
-              </button>
-              {/* Stand-in for the Shortcut, for saving from a desktop browser. */}
-              <NextLink className={styles.searchToggle} href="/capture" aria-label="Add a link">
-                <PlusIcon />
-              </NextLink>
-            </div>
-          )}
-        </div>
+      {/* The compact bar. It holds the trailing button at all times and takes
+          over the title once the large one has scrolled away. The title here
+          is a second copy of the <h1> below, so it's hidden from assistive
+          tech rather than announced twice. */}
+      <div className={`${styles.navBar} ${scrolled ? styles.navBarScrolled : ''}`}>
+        <div className={styles.navSpacer} />
+        <span
+          aria-hidden="true"
+          className={`${styles.navTitle} ${scrolled ? styles.navTitleVisible : ''}`}
+        >
+          Junk Drawer
+        </span>
+        {/* Stand-in for the Shortcut, for saving from a desktop browser. */}
+        <NextLink className={styles.barButton} href="/capture" aria-label="Add a link">
+          <PlusIcon />
+        </NextLink>
+      </div>
 
-        {searchOpen ? (
-          <div className={styles.searchBar}>
-            <input
-              ref={searchRef}
-              className={styles.searchField}
-              type="search"
-              // Typing Hebrew into an LTR field puts the caret and the
-              // punctuation on the wrong side; the rest of the app already
-              // leans on dir="auto" for exactly this.
-              dir="auto"
-              placeholder="Search in Hebrew or English"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => e.key === 'Escape' && closeSearch()}
-            />
+      <h1 className={styles.largeTitle}>Junk Drawer</h1>
+
+      {/* Always on screen, under the title, rather than behind an icon: it's
+          where iOS puts a search bar, and a filter you can see is one you
+          remember you have. */}
+      <div className={styles.searchRow}>
+        <div className={styles.searchField}>
+          <span className={styles.searchGlyph}>
+            <SearchIcon />
+          </span>
+          <input
+            ref={searchRef}
+            className={styles.searchInput}
+            type="search"
+            // Typing Hebrew into an LTR field puts the caret and the
+            // punctuation on the wrong side; the rest of the app already
+            // leans on dir="auto" for exactly this.
+            dir="auto"
+            placeholder="Search"
+            aria-label="Search links in Hebrew or English"
+            value={query}
+            onFocus={() => setSearchActive(true)}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => e.key === 'Escape' && closeSearch()}
+          />
+          {query && (
             <button
               type="button"
-              className={styles.searchToggle}
-              aria-label="Close search"
-              onClick={closeSearch}
+              className={styles.searchClear}
+              aria-label="Clear search"
+              onClick={() => {
+                setQuery('')
+                searchRef.current?.focus()
+              }}
             >
               <CloseIcon />
             </button>
-          </div>
-        ) : (
-          <div className={styles.chips}>
-            {[ALL, ...CORE_TAGS].map((tag) => (
-              <button
-                key={tag}
-                type="button"
-                className={`${styles.chip} ${tag === activeTag ? styles.chipActive : ''}`}
-                aria-pressed={tag === activeTag}
-                onClick={() => setActiveTag(tag)}
-              >
-                {tag}
-              </button>
-            ))}
-          </div>
+          )}
+        </div>
+        {(searchActive || query) && (
+          <button type="button" className={styles.searchCancel} onClick={closeSearch}>
+            Cancel
+          </button>
         )}
+      </div>
+
+      <div className={styles.tabs} role="group" aria-label="Filter by tag">
+        {[ALL, ...CORE_TAGS].map((tag) => (
+          <button
+            key={tag}
+            type="button"
+            className={`${styles.tab} ${tag === activeTag ? styles.tabActive : ''}`}
+            aria-pressed={tag === activeTag}
+            onClick={() => setActiveTag(tag)}
+          >
+            {/* Rendered only under the active tab, and the same element
+                throughout: `layoutId` is what makes it travel to the tab you
+                tapped instead of disappearing here and reappearing there. */}
+            {tag === activeTag && (
+              <motion.span layoutId="tabPill" className={styles.tabPill} transition={TAB_SPRING} />
+            )}
+            <span className={styles.tabLabel}>{tag}</span>
+          </button>
+        ))}
       </div>
 
       {/* Sits above the sections rather than in the header: it acts on the
@@ -400,7 +482,7 @@ export function LinkList({ links }: { links: Link[] }) {
           const bodyId = `section-${section.key}`
 
           return (
-            <section key={section.key}>
+            <section key={section.key} className={styles.section}>
               {section.pinned ? (
                 <div className={`${styles.sectionHeader} ${styles.sectionHeaderStatic}`}>
                   {sectionLabel(section)}
@@ -413,6 +495,7 @@ export function LinkList({ links }: { links: Link[] }) {
                   aria-controls={bodyId}
                   onClick={() => toggleSection(section.key)}
                 >
+                  {sectionLabel(section)}
                   <span
                     className={`${styles.sectionChevron} ${
                       collapsed ? styles.sectionChevronClosed : ''
@@ -420,15 +503,22 @@ export function LinkList({ links }: { links: Link[] }) {
                   >
                     <ChevronIcon />
                   </span>
-                  {sectionLabel(section)}
                 </button>
               )}
-              {!collapsed && <div id={bodyId}>{section.links.map(renderRow)}</div>}
+              {!collapsed && (
+                <div id={bodyId} className={styles.group}>
+                  {section.links.map(renderRow)}
+                </div>
+              )}
             </section>
           )
         })
       ) : (
-        visible.map(renderRow)
+        // A filtered tab is one category, so it's a single group with no
+        // header — the segmented control above it already says which.
+        <div className={styles.section}>
+          <div className={styles.group}>{visible.map(renderRow)}</div>
+        </div>
       )}
 
       <AnimatePresence>

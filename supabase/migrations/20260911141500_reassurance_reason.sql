@@ -1,0 +1,13 @@
+-- Why the score is what it is: one sentence, in the same Gemini call that
+-- produces `reassurance_score`.
+--
+-- The number on its own is an assertion — an 8 with no reason behind it is
+-- indistinguishable from a guess, and there's no IMDb page to go and check the
+-- way a watch row has. The sentence is what makes the score worth trusting or
+-- arguing with, so it's stored next to it rather than regenerated on read.
+--
+-- Kept out of `description`, which holds the book's own synopsis: that comes
+-- from the publisher or the scrape and is about the book, while this is about
+-- the reader. Merging them would also put the app's opinion into the field the
+-- search index and the `watch` pipeline both already write.
+alter table links add column if not exists reassurance_reason text;

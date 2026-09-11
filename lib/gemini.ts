@@ -25,6 +25,8 @@ export interface GeminiResult {
   /** 0-10, or null unless `tags` includes `read` and this is a specific
    *  book — see READ_TASTE_PROFILE. */
   reassurance_score: number | null
+  /** The one-sentence case for that score. Null whenever the score is. */
+  reassurance_reason: string | null
 }
 
 /**
@@ -155,13 +157,42 @@ const RESPONSE_SCHEMA = {
         'the book\'s general popularity, star rating or bestseller status.\n' +
         READ_TASTE_PROFILE,
     },
+    reassurance_reason: {
+      type: Type.STRING,
+      description:
+        'The case for that score, in one sentence under 25 words, addressed to the reader as ' +
+        '"you". Name what this book actually does — its POV, its humour, how the romance is ' +
+        'written, how dark it gets — and tie it to a specific like or dislike above. Say the ' +
+        'reservation out loud when there is one. Never mention scores, taste profiles, ' +
+        'percentages or the word "reassurance"; never pad it with "you will love this". ' +
+        'Empty string whenever reassurance_score is 0 for not being a book.',
+    },
     // Last on purpose: the model has already committed to a title, a summary
     // and a tag by the time it writes these, so the terms describe what it
     // decided the thing is rather than leading that decision.
     search_terms: SEARCH_TERMS_PROPERTY,
   },
-  required: ['clean_title', 'summary', 'tags', 'freeform_tag', 'reassurance_score', 'search_terms'],
-  propertyOrdering: ['clean_title', 'summary', 'tags', 'freeform_tag', 'reassurance_score', 'search_terms'],
+  required: [
+    'clean_title',
+    'summary',
+    'tags',
+    'freeform_tag',
+    'reassurance_score',
+    'reassurance_reason',
+    'search_terms',
+  ],
+  // The reason comes after the score rather than before it so the sentence is
+  // written to justify a number already committed to, instead of the number
+  // being rounded to fit a sentence the model has just talked itself into.
+  propertyOrdering: [
+    'clean_title',
+    'summary',
+    'tags',
+    'freeform_tag',
+    'reassurance_score',
+    'reassurance_reason',
+    'search_terms',
+  ],
 }
 
 /** The image schema adds OCR. Kept separate rather than making extracted_text
@@ -335,6 +366,7 @@ interface RawResult {
   tags?: unknown
   freeform_tag?: unknown
   reassurance_score?: unknown
+  reassurance_reason?: unknown
   search_terms?: unknown
   extracted_text?: unknown
 }
@@ -345,6 +377,7 @@ function toResult(raw: RawResult): GeminiResult {
     : []
   const freeform = typeof raw.freeform_tag === 'string' ? raw.freeform_tag : ''
   const tags = normaliseTags(coreTags, freeform)
+  const isBook = tags.includes('read')
 
   return {
     clean_title: str(raw.clean_title),
@@ -355,7 +388,8 @@ function toResult(raw: RawResult): GeminiResult {
     // The model is asked for 0 on anything that isn't a book (see
     // READ_TASTE_PROFILE) — that sentinel is only meaningful together with
     // the tag, so it's dropped here rather than trusted on its own.
-    reassurance_score: tags.includes('read') ? clampScore(raw.reassurance_score) : null,
+    reassurance_score: isBook ? clampScore(raw.reassurance_score) : null,
+    reassurance_reason: (isBook && str(raw.reassurance_reason)) || null,
   }
 }
 
@@ -386,7 +420,10 @@ function buildImagePrompt(note: string | null): string {
     `3. tags: choose from ${CORE_TAGS.join(', ')}. Usually exactly one. Omit rather than guess.`,
     '4. freeform_tag: at most one specific lowercase word for what this is.',
     '5. reassurance_score: only if tags includes "read" and the image shows a',
-    '   specific book (a cover, a listing, a page of one) — otherwise 0.',
+    '   specific book (a cover, a listing, a page of one) — otherwise 0. With it,',
+    '   reassurance_reason: one sentence under 25 words, addressed as "you", naming',
+    '   what the book does and tying it to a like or a dislike below. Empty when the',
+    '   score is 0 for not being a book.',
     '   ' + READ_TASTE_PROFILE.replace(/\n/g, '\n   '),
     '6. summary: under 20 words describing what the screenshot shows.',
     '7. extracted_text: every legible piece of text, verbatim, in reading order.',
@@ -514,7 +551,11 @@ function buildPrompt({
     `- tags: choose from ${CORE_TAGS.join(', ')}. Usually exactly one. Omit rather than guess.`,
     '- freeform_tag: at most one specific lowercase word for what this actually is.',
     '- reassurance_score: only if tags includes "read" and this is a specific book (never a ' +
-      'store, reading list, or article about books in general) — otherwise 0.\n' +
+      'store, reading list, or article about books in general) — otherwise 0. With it, ' +
+      'reassurance_reason: one sentence under 25 words, addressed as "you", naming what this ' +
+      'book does — its POV, its humour, how the romance is written, how dark it gets — and ' +
+      'tying it to a like or a dislike below. Say the reservation out loud when there is one. ' +
+      'Empty when the score is 0 for not being a book.\n' +
       READ_TASTE_PROFILE,
     searchTermsRule('- search_terms:'),
     '- clean_title: under 8 words, sentence case, no site name or marketing padding.',

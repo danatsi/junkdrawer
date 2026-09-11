@@ -1,56 +1,187 @@
-/* Design tokens from link-box-spec.md §4.1.
-   The font family is supplied by next/font in layout.tsx, which sets
-   --font-plex on <html>. */
+/* iOS system design tokens — see link-box-spec.md §4.1.
+ *
+ * This replaced "Ink", a custom dark-only palette with IBM Plex type and dense
+ * borderless rows. The app is used almost entirely as a home-screen PWA on a
+ * phone, and a custom system sitting next to Mail and Notes read as a website
+ * in a browser rather than an app on the device. So the values below are
+ * Apple's own rather than ours: system colours, the SF type scale, and the
+ * inset-grouped list metrics. Nothing here should be invented — if a value is
+ * needed that Apple publishes, use theirs.
+ *
+ * Both appearances are defined, because following the device is the single
+ * most app-like thing an interface on iOS does. Dark is the default so a
+ * first paint in the dark can't flash white.
+ */
 
 :root {
-  /* Ink. The app is a dark neutral tray and the thumbnails are the only colour
-     in it — the content is other people's images, so anything the interface
-     tints competes with them. There is deliberately no accent hue: what used
-     to lean on terracotta now leans on contrast and on the surface tone. */
-  --color-bg: #16171A;
-  --color-surface: #232428;
-  --color-text-primary: #ECECEE;
-  --color-text-secondary: #8A8B93;
-  --color-divider: #232428;
-  --color-thumb-placeholder: #232428;
+  color-scheme: light dark;
 
-  /* Not a hue any more — the ink inverted. Still named "accent" because it
-     still marks the same things: the active chip, a score, the one link in a
-     panel worth tapping. On a dark ground, full-contrast ink is what an accent
-     colour used to do on a light one. */
-  --color-accent: #ECECEE;
-  --color-accent-bg: #16171A;
+  /* --- Greyscale backgrounds (dark) ---------------------------------------
+     Grouped backgrounds are the ones in use: an inset-grouped list puts the
+     *darker* tone behind the screen and the *lighter* one in the row groups,
+     which is the opposite of the plain hierarchy. */
+  --ios-grouped-bg: #000000;
+  --ios-grouped-bg-elevated: #1C1C1E;
+  --ios-bg: #000000;
+  --ios-bg-secondary: #1C1C1E;
+  --ios-bg-tertiary: #2C2C2E;
 
-  /* The one hue in the app, and only ever behind a finger: the delete tier of
-     the swipe. Muted rather than a signal red — it has to read as destructive
-     against a near-black ground without becoming the brightest thing on a
-     screen full of photographs. Nothing else may use it; if a second thing
-     ever needs to look dangerous, that's the moment to ask whether the app
-     has a colour system rather than an exception. */
-  --color-danger: #8C2F2A;
-  --color-danger-text: #F6EDEC;
+  /* --- Labels (dark) ---
+     Not flat greys: Apple's label colours are translucent so they sit on any
+     background, which is what keeps text on a thumbnail-heavy row readable. */
+  --ios-label: #FFFFFF;
+  --ios-label-secondary: rgba(235, 235, 245, 0.6);
+  --ios-label-tertiary: rgba(235, 235, 245, 0.3);
+  --ios-label-quaternary: rgba(235, 235, 245, 0.18);
 
-  /* One family covers Latin and Hebrew, so the next/font variable is usable
-     directly. A two-family stack could not use it: next/font folds a
-     metric-matched local(Arial) face into the variable with no unicode-range,
-     and it answered every Hebrew glyph before the stack reached the Hebrew
-     family. Nothing sits behind this one, so there is nothing to shadow. */
-  --font: var(--font-plex), -apple-system, BlinkMacSystemFont, sans-serif;
+  --ios-separator: rgba(84, 84, 88, 0.65);
+  --ios-separator-opaque: #38383A;
+
+  /* --- Fills (dark) ---
+     For controls sitting on a background rather than for text: the segmented
+     control's track, a tag badge, a search field. */
+  --ios-fill: rgba(120, 120, 128, 0.36);
+  --ios-fill-secondary: rgba(120, 120, 128, 0.32);
+  --ios-fill-tertiary: rgba(118, 118, 128, 0.24);
+  --ios-fill-quaternary: rgba(116, 116, 128, 0.18);
+
+  /* --- Tint colours (dark variants) --- */
+  --ios-blue: #0A84FF;
+  --ios-red: #FF453A;
+  --ios-green: #30D158;
+  --ios-orange: #FF9F0A;
+  --ios-yellow: #FFD60A;
+  --ios-indigo: #5E5CE6;
+  --ios-gray: #8E8E93;
+  --ios-gray-2: #636366;
+
+  /* The segmented control's selected thumb: an elevated grey in the dark, a
+     white card with a shadow in the light. Two tokens because the shadow has
+     to disappear along with it. */
+  --ios-segment-thumb: #636366;
+  --ios-segment-thumb-shadow: none;
+
+  /* Translucent chrome. `backdrop-filter` does the work; the colour underneath
+     is what the material looks like where there's nothing to blur. */
+  /* Weighted towards opaque rather than towards the blur. Where
+     `backdrop-filter` is unavailable or not composited, these still read as a
+     bar and a sheet instead of as text showing through text. */
+  --ios-material-bar: rgba(14, 14, 16, 0.92);
+  --ios-material-thick: rgba(44, 44, 46, 0.9);
+
+  /* --- Metrics ---
+     Points, rendered 1:1 as px. The list inset, the continuous corner radius
+     of a grouped section, and the minimum size of anything tappable — the last
+     one is a floor, not a suggestion (HIG: 44x44pt). */
+  --ios-gutter: 16px;
+  /* Softer and larger than Apple's own 10pt grouped radius. The whole reason
+     to draw a rounded container is the shape, and at 10pt on a 16pt inset it
+     reads as a square with the corners filed off. */
+  --ios-radius-group: 18px;
+  --ios-radius-control: 12px;
+  --ios-radius-thumb: 13px;
+  --radius-pill: 999px;
+  --ios-tap: 44px;
+
+  /* Where a row's separator starts: flush with the title, not with the screen
+     edge, so the thumbnails form one unbroken column down the leading side.
+     The gutter, plus the thumbnail, plus the gap after it. */
+  --ios-row-leading: 72px;
+
+  /* --- Type ---
+     SF is the system face and comes from the OS, so there is no webfont and
+     nothing to download. It also settles the bilingual problem the custom
+     system existed to solve: SF Hebrew is drawn as part of the same family as
+     SF Pro, so a mixed Hebrew/Latin title agrees on weight by construction —
+     which a Latin family with a Hebrew one behind it in the stack never did.
+     Off Apple platforms this lands on the platform's own UI face, which is
+     the intent: use whatever the device calls system. */
+  --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, 'Segoe UI',
+    Roboto, 'Helvetica Neue', sans-serif;
+
+  /* The iOS text styles, by name. Sizes are Apple's at the default Dynamic
+     Type setting; `rem` so that a person who has scaled text up in the OS or
+     the browser scales this with it. */
+  --text-large-title: 2.125rem; /* 34pt */
+  --text-title-2: 1.375rem; /* 22pt */
+  --text-title-3: 1.25rem; /* 20pt */
+  --text-headline: 1.0625rem; /* 17pt, semibold */
+  --text-body: 1.0625rem; /* 17pt */
+  --text-callout: 1rem; /* 16pt */
+  --text-subhead: 0.9375rem; /* 15pt */
+  --text-footnote: 0.8125rem; /* 13pt */
+  --text-caption: 0.75rem; /* 12pt */
+  --text-caption-2: 0.6875rem; /* 11pt */
 }
 
-* { box-sizing: border-box; }
+@media (prefers-color-scheme: light) {
+  :root {
+    --ios-grouped-bg: #F2F2F7;
+    --ios-grouped-bg-elevated: #FFFFFF;
+    --ios-bg: #FFFFFF;
+    --ios-bg-secondary: #F2F2F7;
+    --ios-bg-tertiary: #FFFFFF;
+
+    --ios-label: #000000;
+    --ios-label-secondary: rgba(60, 60, 67, 0.6);
+    --ios-label-tertiary: rgba(60, 60, 67, 0.3);
+    --ios-label-quaternary: rgba(60, 60, 67, 0.18);
+
+    --ios-separator: rgba(60, 60, 67, 0.29);
+    --ios-separator-opaque: #C6C6C8;
+
+    --ios-fill: rgba(120, 120, 128, 0.2);
+    --ios-fill-secondary: rgba(120, 120, 128, 0.16);
+    --ios-fill-tertiary: rgba(118, 118, 128, 0.12);
+    --ios-fill-quaternary: rgba(116, 116, 128, 0.08);
+
+    --ios-blue: #007AFF;
+    --ios-red: #FF3B30;
+    --ios-green: #34C759;
+    --ios-orange: #FF9500;
+    --ios-yellow: #FFCC00;
+    --ios-indigo: #5856D6;
+    --ios-gray: #8E8E93;
+    --ios-gray-2: #AEAEB2;
+
+    --ios-segment-thumb: #FFFFFF;
+    --ios-segment-thumb-shadow: 0 3px 8px rgba(0, 0, 0, 0.12), 0 1px 1px rgba(0, 0, 0, 0.04);
+
+    --ios-material-bar: rgba(246, 246, 248, 0.94);
+    --ios-material-thick: rgba(255, 255, 255, 0.92);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
 
 html {
-  background: var(--color-bg);
-  color-scheme: dark;
+  background: var(--ios-grouped-bg);
+  /* Stops iOS bumping type up a notch in landscape on its own, which
+     rem-based sizes would then compound. Scaling is the person's call,
+     through the OS, and that still works. */
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
   margin: 0;
-  background: var(--color-bg);
+  background: var(--ios-grouped-bg);
   font-family: var(--font);
-  color: var(--color-text-primary);
+  font-size: var(--text-body);
+  color: var(--ios-label);
   display: flex;
   justify-content: center;
   -webkit-font-smoothing: antialiased;
+  /* iOS shows a grey flash on tap for anything it thinks is a link. Every
+     surface here draws its own pressed state, so the default is noise. */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Controls don't inherit the family, and every button in the app is text. */
+button,
+input,
+textarea,
+select {
+  font-family: inherit;
 }

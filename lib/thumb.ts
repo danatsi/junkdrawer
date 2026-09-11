@@ -13,16 +13,21 @@ export interface GeneratedThumb {
   background: string
 }
 
-/** Rotations around the palette's warm neutrals. Deliberately narrow: these
- *  sit behind the content and must never compete with the accent colour, which
- *  is reserved for status (spec §4.1). */
+/** iOS system colours, each shading into its own darker variant — the
+ *  treatment Contacts and Files use for an item with no image of its own: a
+ *  saturated tile carrying a white monogram.
+ *
+ *  Six hues, and systemRed is deliberately not among them. That colour means
+ *  "this destroys something" everywhere else on the platform, and the app
+ *  spends it on exactly one control (the delete action); a row that merely
+ *  happened to hash to red would spend it again for nothing. */
 const TONES: [string, string][] = [
-  ['#E4DBC9', '#CBBDA2'],
-  ['#DED3BE', '#C2B195'],
-  ['#E8DCC6', '#CFBE9C'],
-  ['#DAD2C4', '#BCAF99'],
-  ['#E6D9C4', '#C8B694'],
-  ['#DCD0BB', '#BFAE90'],
+  ['#0A84FF', '#0060DF'], // blue
+  ['#5E5CE6', '#3634A3'], // indigo
+  ['#30D158', '#248A3D'], // green
+  ['#FF9F0A', '#C93400'], // orange
+  ['#BF5AF2', '#8944AB'], // purple
+  ['#64D2FF', '#0071A4'], // teal
 ]
 
 export function generatedThumb(link: Link): GeneratedThumb {

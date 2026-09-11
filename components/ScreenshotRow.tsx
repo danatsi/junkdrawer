@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import type { Link } from '@/lib/types'
 import { displayTitle } from '@/lib/types'
-import { ChevronIcon, ShareIcon } from './Icons'
+import { ChevronIcon, ShareIcon, StarIcon } from './Icons'
 import { ImageViewer } from './ImageViewer'
 import styles from './LinkRow.module.css'
 
@@ -69,6 +69,15 @@ export function ScreenshotRow({
               <span dir="auto" className={styles.title}>
                 {displayTitle(link)}
               </span>
+              {/* A screenshot of a book cover reaches the same taste scoring a
+                  pasted link does — the vision path writes both fields — so it
+                  gets the same badge. */}
+              {link.reassurance_score !== null && (
+                <span className={styles.score}>
+                  <StarIcon />
+                  {`${link.reassurance_score}/10`}
+                </span>
+              )}
             </div>
             <div className={styles.meta}>
               <span className={`${styles.tagPill} ${styles.tagAccent}`}>screenshot</span>
@@ -119,6 +128,9 @@ export function ScreenshotRow({
             )}
             <div dir="auto">
               {link.description ?? link.note}
+              {link.reassurance_reason && (
+                <p className={styles.reason}>{link.reassurance_reason}</p>
+              )}
               {shareError && <div className={styles.note}>{shareError}</div>}
             </div>
           </div>

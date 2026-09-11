@@ -31,8 +31,8 @@ so the filter row stays fixed-width and predictable while search (Phase 6) can s
 | LLM | Gemini Flash via `@google/genai`, `responseSchema` for strict JSON | Per spec §3.3; schema mode removes JSON-parsing failure as a class of bug |
 | Movie data | TMDb (overview, imdb_id, trailer) → OMDb (IMDb rating) | Per spec §3.4 |
 | Gestures | Framer Motion — **Phase 6 only** | Not pulled in until swipe-to-archive is actually built |
-| Styling | Plain CSS Modules + `tokens.css` | The design is ~200 lines of CSS that already exists in `mock.html`. Tailwind would be a rewrite of it for no gain. |
-| Fonts | `next/font/google` — Lora 500, Inter 400/500 | Self-hosted at build time; kills the render-blocking Google Fonts request in the mock |
+| Styling | Plain CSS Modules + tokens in `app/globals.css` | The design is a token set plus one stylesheet per component. Tailwind would be a rewrite for no gain. |
+| Fonts | None — SF via the system stack | The device already has it (spec §4.1), so there's no webfont request at all. Retired `next/font` and IBM Plex Sans Hebrew. |
 
 **Deliberately not in the stack:** no ORM (four queries total), no state library (one list, one filter string,
 `useState` covers it), no auth provider (see §5), no icon package (spec §7 — inline SVGs, already written in the mock).
@@ -100,6 +100,7 @@ create table links (
   enrich_error  text,
   keywords      text[] not null default '{}',       -- bilingual search vocabulary (Phase 6)
   reassurance_score smallint,                       -- 0-10, read-tagged books only
+  reassurance_reason text,                          -- one sentence saying why, moves with the score
   created_at    timestamptz not null default now()
 );
 
@@ -184,10 +185,18 @@ another service:
   and is folded into the same call that already writes tags and summary — no second request.
 - `reassurance_score`, 0-10, only when tags includes `read` and the row is a specific book (never a
   store, list, or article about books); null otherwise, same as `imdb_rating` is null off `watch`.
-- Renders in the same score badge as the watch tag (`components/LinkRow.tsx` — `hasScore` covers both).
+- `reassurance_reason` carries the one-sentence case for that number, written *after* it in the
+  schema's property order so the sentence justifies a score already committed to rather than the
+  score being rounded to fit a sentence the model talked itself into. The two are written and
+  cleared together: a score under last run's reasoning would be worse than a score with none.
+  It's kept out of `description`, which holds the book's own synopsis — that field is about the
+  book, this one is about the reader, and `description` is also what the search index and the
+  watch pipeline write.
+- Renders in the same score badge as the watch tag (`components/LinkRow.tsx` — `hasScore` covers
+  both), with the reasoning in the row's expanded panel, set off by a leading rule.
 
-**Done when:** saving a specific book comes back with a 0-10 badge reasoned from the taste profile,
-and a shopping or recipe row never shows one.
+**Done when:** saving a specific book comes back with a 0-10 badge reasoned from the taste profile
+and a sentence in its panel saying why, and a shopping or recipe row never shows either.
 
 ### Phase 6 — Polish (resolves the remaining spec §6 questions)
 - **Frontend gate** (§5 below) — do this before the URL is shared anywhere.
@@ -201,9 +210,17 @@ and a shopping or recipe row never shows one.
     its neighbours.
   - **The undo for a delete is the delay itself.** The request isn't sent when you tap; it's sent
     when the toast expires, so undo is simply never sending it. No soft-delete column, and no
-    "restore" path that would have to put back an image already gone. A `pagehide` listener
-    flushes a still-pending delete with `keepalive`, so leaving the page commits it rather than
-    resurrecting a row you watched leave.
+    "restore" path that would have to put back an image already gone.
+  - That delay is held in a **ref owned by the list**, not by the toast's timer, and every path
+    that closes the undo window flushes it: the timer, a second swipe, `pagehide`, and unmount.
+    Holding it in the toast is what the first cut did, and it silently lost deletes — the row
+    left the list and stayed in the table. Two ways in: deleting a second row replaced `pending`
+    and cleared the first row's timer, and moving to another page in the app unmounted the list
+    without firing `pagehide` at all. Both are covered by browser tests now. Taking the id out
+    of the set is what claims the send, so racing flushes still send exactly once.
+  - `destroy()` also checks `response.ok`. `fetch` rejects on a network failure and nothing
+    else, so a server that refused — a 404 from the site gate, a 500 from a bad key — used to
+    arrive looking exactly like success.
   - The first cut of this decided by distance instead — archive past 40% of the row's width,
     delete past 75%. It was wrong in a way worth recording: the destructive outcome was the one
     you got by swiping *harder*, and at 75% your thumb is over the label that would have told you
@@ -230,7 +247,8 @@ and a shopping or recipe row never shows one.
   list is already fetched whole for the tag filter.
 - **Multi-expand** (open q5) — proposal: allow several panels open at once. Auto-close is the more
   opinionated behaviour and there's no cost to leaving two open.
-- **PWA** — manifest, icon, `theme-color: #F1ECE2`, `display: standalone`.
+- **PWA** — manifest, icon, `display: standalone`, and a `theme-color` per appearance so the
+  status bar doesn't disagree with the app in one of them.
 - Loading/skeleton state for `enrichment: 'pending'` rows.
 
 ### Phase 7 — v2 screenshots

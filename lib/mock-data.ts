@@ -42,6 +42,7 @@ const base = {
   imdb_rating: null,
   trailer_url: null,
   reassurance_score: null,
+  reassurance_reason: null,
   extracted_text: null,
   image_kind: null,
   keywords: [] as string[],
@@ -230,8 +231,12 @@ export const MOCK_LINKS: Link[] = [
     image_kind: 'photo' as const, image_url: thumb('#DCCDB2', '#B59A6E'),
     tags: ['read'],
     // Contemporary, funny, first-person romantic comedy — squarely the sweet
-    // spot the taste profile in lib/gemini.ts describes.
+    // spot the taste profile in lib/gemini.ts describes. The reason carries a
+    // reservation, which is the case worth designing the panel against: the
+    // sentence has to be able to argue with its own number.
     reassurance_score: 8,
+    reassurance_reason:
+      'First-person, genuinely funny about a woman falling apart, though Kinsella tips into farce where you want the feelings to stay real.',
     created_at: daysAgo(1),
     keywords: [
       'book',

@@ -1,36 +1,47 @@
+/* A row in an inset-grouped list. See app/globals.css for the token set and
+   link-box-spec.md §4.2 for the anatomy. */
+
 .row {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
-  padding: 11px 20px;
+  /* 11px against a 44px thumbnail clears the 44pt minimum row height with
+     room to spare, and the vertical rhythm comes from the thumbnail rather
+     than from the text. */
+  padding: 11px var(--ios-gutter);
 }
 
 .rowLink {
   display: flex;
+  align-items: center;
   flex: 1;
   min-width: 0;
-  gap: 13px;
+  gap: 12px;
   text-decoration: none;
   color: inherit;
 }
 
+/* iOS list thumbnails are a rounded square at the leading edge. 44pt, so the
+   row is at least a tap tall whatever the text does. */
 .thumb {
-  width: 46px;
-  height: 46px;
-  border-radius: 9px;
-  background: var(--color-thumb-placeholder);
+  width: 44px;
+  height: 44px;
+  border-radius: var(--ios-radius-thumb);
+  background: var(--ios-fill-quaternary);
   flex-shrink: 0;
   object-fit: cover;
 }
 
 /* The floor of the fallback chain — a tile derived from the domain. */
+/* White on a saturated tile, in both appearances — the tile brings its own
+   background, so it doesn't take the label colours with it. */
 .thumbGenerated {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
-  color: var(--color-text-secondary);
-  opacity: 0.85;
+  font-size: var(--text-title-3);
+  font-weight: 600;
+  color: #FFFFFF;
 }
 
 .content {
@@ -41,28 +52,39 @@
 .titleLine {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  gap: 6px;
 }
 
+/* Body, 17pt, regular — the size and weight of a row title everywhere on the
+   platform. The old design set this at 15.5/500, which is a caption trying to
+   act as a title. */
 .title {
-  font-size: 15.5px;
-  font-weight: 500;
+  font-size: var(--text-body);
+  font-weight: 400;
+  /* Clamped to two lines rather than wrapping freely. One line is what Mail
+     gives a subject, and it was tried here first — but these titles carry the
+     part that identifies the thing at the end ("חלה מתוקה של שישי - 180C, 40
+     דקות", "Wide leg high waist jeans"), and a single line at 17pt cut most of
+     them mid-word. Two keeps the rows to two possible heights, which is what
+     the uniformity was for. */
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
   /* dir="auto" is doing its job on the ordering, but it also flips the
      alignment, and a right-aligned RTL title drifts away from its thumbnail
      while the meta line under it stays left. Pinning alignment keeps every
-     row sharing one left edge; the bidi ordering inside the line is
+     row sharing one leading edge; the bidi ordering inside the line is
      untouched. */
   text-align: left;
-  /* Tightened a hair: at this size the default tracking reads loose, and Plex
-     sets both scripts on the same sidebearings so it tightens evenly. */
-  letter-spacing: -0.011em;
+  letter-spacing: -0.01em;
   line-height: 1.3;
-  color: var(--color-text-primary);
+  color: var(--ios-label);
 }
 
 .pending {
-  color: var(--color-text-secondary);
+  color: var(--ios-label-secondary);
 }
 
 /* A pending row is real and tappable, so it gets a quiet shimmer rather than
@@ -71,9 +93,9 @@
 .thumbPending {
   background: linear-gradient(
     100deg,
-    var(--color-thumb-placeholder) 30%,
-    var(--color-divider) 50%,
-    var(--color-thumb-placeholder) 70%
+    var(--ios-fill-quaternary) 30%,
+    var(--ios-fill-secondary) 50%,
+    var(--ios-fill-quaternary) 70%
   );
   background-size: 300% 100%;
   animation: shimmer 1.6s ease-in-out infinite;
@@ -84,31 +106,35 @@
 }
 
 /* Failed is a resting state, not an alarm — the row still works, it's just
-   thin. Same weight as a tag, no red. */
+   thin. systemRed would make it the loudest thing in the list; that colour is
+   reserved for the one control that destroys something. */
 .failedNote {
-  font-style: italic;
+  color: var(--ios-label-secondary);
 }
 
 .failedPanel {
-  margin-bottom: 10px;
+  margin-bottom: 4px;
 }
 
+/* Plain tinted text, which is what a button inside a list row is on iOS. */
 .retry {
-  font-family: var(--font);
-  font-size: 13px;
+  font-family: inherit;
+  font-size: var(--text-subhead);
   margin-top: 6px;
   padding: 0;
   border: none;
   background: none;
-  color: var(--color-accent);
+  color: var(--ios-blue);
   cursor: pointer;
-  text-decoration: underline;
+}
+
+.retry:active {
+  opacity: 0.4;
 }
 
 .retry:disabled {
-  color: var(--color-text-secondary);
+  color: var(--ios-label-tertiary);
   cursor: default;
-  text-decoration: none;
 }
 
 @keyframes shimmer {
@@ -121,32 +147,39 @@
   50% { opacity: 0.45; }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .thumbPending,
-  .pendingNote {
-    animation: none;
-  }
-}
+/* --- Badges ------------------------------------------------------------- */
 
+/* The score. A capsule, because a badge on iOS is a capsule, with the star in
+   systemYellow so the number reads as a rating at a glance rather than as
+   another piece of metadata. */
 .score {
-  background: var(--color-surface);
-  color: var(--color-text-primary);
-  font-size: 11px;
-  font-weight: 500;
-  padding: 2px 7px;
-  border-radius: 5px;
   display: inline-flex;
   align-items: center;
+  /* Never squeezed out by a long title — the title ellipsises instead. */
+  flex: none;
   gap: 3px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--ios-fill-quaternary);
+  font-size: var(--text-caption-2);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ios-label-secondary);
+}
+
+.score svg {
+  color: var(--ios-yellow);
 }
 
 .meta {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
-  color: var(--color-text-secondary);
-  margin-top: 3px;
+  white-space: nowrap;
+  /* Subhead, the standard secondary line under a list row title. */
+  font-size: var(--text-subhead);
+  color: var(--ios-label-secondary);
+  margin-top: 1px;
   min-width: 0;
 }
 
@@ -156,42 +189,66 @@
   white-space: nowrap;
 }
 
-/* The tag is a shape, not a word after a dot: it says "this is a category"
-   without spending a separator glyph on saying it. */
 .tagPill {
   flex: none;
-  background: var(--color-surface);
-  color: var(--color-text-secondary);
-  font-size: 10.5px;
-  line-height: 1.5;
-  padding: 1.5px 6px;
-  border-radius: 5px;
+  background: var(--ios-fill-quaternary);
+  color: var(--ios-label-secondary);
+  font-size: var(--text-caption-2);
+  line-height: 1.6;
+  padding: 0 7px;
+  border-radius: 999px;
+  text-transform: capitalize;
 }
 
-/* Rows with a score badge (watch, and read when it's a book) get the
-   brighter tag as the second half of that signal — the only tag that does. */
+/* Rows with a score badge get the brighter tag as the second half of that
+   signal — the only tag that does. */
 .tagScored {
-  color: var(--color-text-primary);
+  color: var(--ios-label);
 }
+
+/* On a narrow phone the pill and the domain can't both have the width they
+   want, and the domain is the one carrying information the row doesn't
+   otherwise have: the tag is already named by the section header above the
+   row, or by the active tab. Without this, "zara.com" came out as "zara....".
+   The pill goes; the domain stays whole. */
+@media (max-width: 360px) {
+  .tagPill {
+    display: none;
+  }
+}
+
+/* --- Trailing controls -------------------------------------------------- */
 
 .actions {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding-top: 2px;
+  /* No gap: each button already carries a full 44pt of its own. */
+  flex: none;
 }
 
+/* 44x44 of touchable area around a ~20px glyph, per HIG. The negative margin
+   pulls that back out of the row's own padding so the target can be the right
+   size without the row growing to fit two of them. */
 .iconBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ios-tap);
+  height: var(--ios-tap);
+  margin: -11px -6px;
   background: none;
   border: none;
   padding: 0;
   cursor: pointer;
-  display: flex;
-  color: var(--color-text-secondary);
+  color: var(--ios-label-tertiary);
+}
+
+.iconBtn:active {
+  opacity: 0.4;
 }
 
 /* Kept in the layout but invisible on rows with nothing to expand, so the
-   WhatsApp icon never shifts position between rows. */
+   share icon never shifts position between rows. */
 .chevronHidden {
   visibility: hidden;
   pointer-events: none;
@@ -205,6 +262,8 @@
   transform: rotate(180deg);
 }
 
+/* --- The expand panel --------------------------------------------------- */
+
 /* Animating grid-template-rows 0fr -> 1fr eases to the content's natural
    height without measuring it in JS, so no ref is read during render and long
    notes can't clip the way a guessed max-height would. Safari 16+. */
@@ -212,7 +271,7 @@
   display: grid;
   grid-template-rows: 0fr;
   transition: grid-template-rows 0.3s ease;
-  padding: 0 20px;
+  padding: 0 var(--ios-gutter);
 }
 
 .panelOpen {
@@ -224,26 +283,44 @@
   min-height: 0;
 }
 
+/* Indented to the title's leading edge, so the panel reads as belonging to the
+   row above it rather than to the group. */
 .panelInner {
-  padding: 10px 0 14px 59px;
-  font-size: 13px;
-  color: var(--color-text-secondary);
-  line-height: 1.6;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 2px 0 14px 56px;
+  font-size: var(--text-subhead);
+  color: var(--ios-label-secondary);
+  line-height: 1.45;
 }
 
+/* The case for the score, set apart from the synopsis above it because the
+   two speak for different people: the synopsis is about the book, this is
+   about the reader. Tinted and quoted off a leading rule rather than italic —
+   a long Hebrew sentence in italic is close to unreadable. */
+.reason {
+  margin: 0;
+  padding-left: 10px;
+  border-left: 2px solid var(--ios-yellow);
+  color: var(--ios-label);
+}
+
+/* The panel is a flex column with a gap, so nothing in it needs its own
+   spacing rule. Kept as a hook for the share error, which is the one thing in
+   here that isn't part of the row's content. */
 .note {
-  margin-top: 6px;
+  margin: 0;
 }
 
 .trailerLink {
-  display: inline-block;
-  margin-top: 8px;
-  color: var(--color-accent);
+  align-self: flex-start;
+  color: var(--ios-blue);
   text-decoration: none;
-  font-size: 13px;
+  font-size: var(--text-subhead);
 }
 
-/* --- screenshot rows (spec §5.5) --- */
+/* --- Screenshot rows (spec §5.5) ---------------------------------------- */
 
 /* No URL to open, so the whole row is the expand toggle (spec §5.5) —
    the pointer has to cover the padding and the chevron, not just the body. */
@@ -253,6 +330,7 @@
 
 .rowToggle {
   display: flex;
+  align-items: center;
   flex: 1;
   min-width: 0;
   gap: 12px;
@@ -267,23 +345,37 @@
 }
 
 .tagAccent {
-  color: var(--color-text-primary);
+  color: var(--ios-label);
 }
 
 .panelWithThumb {
   display: flex;
+  flex-direction: row;
   gap: 12px;
   align-items: flex-start;
+  padding-left: 0;
 }
 
 .panelThumb {
   width: 56px;
   height: 56px;
-  border-radius: 10px;
+  border-radius: var(--ios-radius-thumb);
   flex-shrink: 0;
   cursor: pointer;
   object-fit: cover;
   border: none;
   padding: 0;
-  background: var(--color-thumb-placeholder);
+  background: var(--ios-fill-quaternary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thumbPending,
+  .pendingNote {
+    animation: none;
+  }
+
+  .chevron,
+  .panel {
+    transition: none;
+  }
 }

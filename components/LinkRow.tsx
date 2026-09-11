@@ -44,7 +44,7 @@ export function LinkRow({
   // A failed row gets a panel even with no note, since the panel is the only
   // place a retry button can legally live — the meta line is inside the row's
   // anchor, and a <button> can't nest in an <a>.
-  const hasPanel = Boolean(link.note || link.description || hasFailed)
+  const hasPanel = Boolean(link.note || link.description || link.reassurance_reason || hasFailed)
   const thumb = generatedThumb(link)
 
   async function retry(e: React.MouseEvent) {
@@ -134,7 +134,11 @@ export function LinkRow({
               )}
             </div>
             <div className={styles.meta}>
-              <span className={styles.domain}>{link.domain}</span>
+              {/* Skipped while the title is standing in for itself: on a
+                  pending or failed row `displayTitle` is already the domain,
+                  and printing it twice squeezed the state note down to
+                  "in… couldn't fetch details". */}
+              {!placeholderTitle && <span className={styles.domain}>{link.domain}</span>}
               {metaDetail}
             </div>
           </div>
@@ -193,11 +197,15 @@ export function LinkRow({
                 </div>
               )}
               {link.description && <div dir="auto">{link.description}</div>}
-              {link.note && (
-                <div dir="auto" className={link.description ? styles.note : undefined}>
-                  {link.note}
-                </div>
+              {/* The score's own argument. Set apart from the synopsis above
+                  it because the two speak for different people: that one is
+                  about the book, this one is about you. */}
+              {link.reassurance_reason && (
+                <p dir="auto" className={styles.reason}>
+                  {link.reassurance_reason}
+                </p>
               )}
+              {link.note && <div dir="auto">{link.note}</div>}
               {link.trailer_url && (
                 <a
                   className={styles.trailerLink}

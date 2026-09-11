@@ -2,7 +2,8 @@
   width: 100%;
   max-width: 420px;
   min-height: 100vh;
-  padding: 20px;
+  min-height: 100dvh;
+  padding: var(--ios-gutter) var(--ios-gutter) calc(var(--ios-gutter) + env(safe-area-inset-bottom));
   /* Centred rather than top-aligned like the other screens: there is one
      control here, and putting it under the thumb on a phone matters more than
      matching the list's top edge. */
@@ -17,58 +18,68 @@
 }
 
 .wordmark {
-  font-family: var(--font);
-  font-size: 20px;
-  font-weight: 500;
+  font-size: var(--text-title-2);
+  font-weight: 700;
+  letter-spacing: 0.011em;
   margin: 0 0 4px;
+  color: var(--ios-label);
 }
 
 .blurb {
-  font-size: 13px;
-  color: var(--color-text-secondary);
+  font-size: var(--text-subhead);
+  color: var(--ios-label-secondary);
   margin: 0 0 24px;
 }
 
 .label {
-  font-size: 12px;
-  color: var(--color-text-secondary);
+  font-size: var(--text-footnote);
+  color: var(--ios-label-secondary);
   margin-bottom: 6px;
 }
 
+/* A filled field rather than an outlined one, which is how iOS draws a text
+   field outside a grouped list. */
 .input {
-  font-family: var(--font);
-  font-size: 16px; /* 16px or iOS zooms the page on focus. */
-  color: var(--color-text-primary);
-  background: transparent;
-  border: 0.5px solid var(--color-divider);
-  border-radius: 6px;
-  padding: 12px 10px;
+  font-size: var(--text-body); /* 17px; under 16px iOS zooms the page on focus. */
+  color: var(--ios-label);
+  background: var(--ios-fill-tertiary);
+  border: none;
+  border-radius: var(--ios-radius-group);
+  padding: 12px;
   margin-bottom: 18px;
   outline: none;
 }
 
 .input:focus {
-  border-color: var(--color-accent);
+  box-shadow: inset 0 0 0 2px var(--ios-blue);
 }
 
+/* A filled, tinted, full-width button — the iOS prominent button. */
 .submit {
-  font-family: var(--font);
-  font-size: 14px;
+  font-family: inherit;
+  font-size: var(--text-body);
+  font-weight: 600;
+  /* 50px clears the 44pt floor for the one control on the screen. */
+  min-height: 50px;
   padding: 12px;
   border: none;
-  border-radius: 6px;
-  background: var(--color-accent);
-  color: var(--color-accent-bg);
+  border-radius: 12px;
+  background: var(--ios-blue);
+  color: #FFFFFF;
   cursor: pointer;
 }
 
+.submit:active {
+  opacity: 0.8;
+}
+
 .submit:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: default;
 }
 
 .error {
-  font-size: 13px;
+  font-size: var(--text-subhead);
   margin: 14px 0 0;
-  color: var(--color-text-primary);
+  color: var(--ios-red);
 }

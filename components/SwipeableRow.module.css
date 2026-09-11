@@ -3,9 +3,10 @@
   overflow: hidden;
 }
 
-/* The action tray, right-aligned behind the row and uncovered as it slides.
-   Two buttons rather than one full-bleed backdrop: the row no longer decides
-   which action you meant, so both have to be visible and tappable at once. */
+/* The action tray, on the trailing side behind the row and uncovered as it
+   slides. Two buttons rather than one full-bleed backdrop: the row no longer
+   decides which action you meant, so both have to be visible and tappable at
+   once. */
 .tray {
   --tray-button: 88px; /* must match BUTTON_WIDTH in SwipeableRow.tsx */
   position: absolute;
@@ -14,34 +15,56 @@
   width: calc(var(--tray-button) * 2);
 }
 
+/* A swipe action on iOS is a full-height tinted panel with a white label —
+   not a button drawn on top of one. */
 .action {
   flex: 1;
   border: 0;
   margin: 0;
   padding: 0;
-  font: inherit;
-  font-size: 13px;
-  letter-spacing: 0.01em;
+  font-family: inherit;
+  font-size: var(--text-footnote);
+  font-weight: 400;
   cursor: pointer;
-  background: var(--color-surface);
-  color: var(--color-text-primary);
+  background: var(--ios-indigo);
+  color: #FFFFFF;
 }
 
-/* Delete. The palette is otherwise hueless on purpose (globals.css: the
-   thumbnails are the only colour, because they're other people's images), and
-   this is the one deliberate exception — it's the only control in the app that
-   can't be taken back, and it sits directly beside one that can. Telling them
-   apart by label alone would put the whole weight of that on a 13px word. */
+.action:active {
+  /* iOS dims the panel under the finger rather than changing its colour. */
+  filter: brightness(0.85);
+}
+
+/* Delete. systemRed, which on this platform means exactly one thing, and this
+   is the only control in the app that can't be taken back — it sits directly
+   beside one that can, so telling them apart cannot rest on a 13px word
+   alone. Nothing else in the app may use this colour. */
 .destructive {
-  background: var(--color-danger);
-  color: var(--color-danger-text);
+  background: var(--ios-red);
 }
 
-/* Opaque, or the tray shows through the row as it moves. */
+/* Opaque, or the tray shows through the row as it moves. Matches the group's
+   own fill rather than the screen behind it, since the row sits inside a
+   grouped card. */
 .sheet {
   position: relative;
-  background: var(--color-bg);
+  background: var(--ios-grouped-bg-elevated);
   touch-action: pan-y;
+}
+
+/* The hairline between rows. It belongs to the row rather than to the group
+   so that it travels with the row under a swipe, the way it does on iOS —
+   a separator that stayed put while its row slid out from under it would look
+   like a seam in the list. Inset to the title's leading edge, and absent on
+   the last row so no rule crosses the group's rounded bottom corner. */
+.container:not(:last-child) .sheet::after {
+  content: '';
+  position: absolute;
+  left: var(--ios-row-leading);
+  right: 0;
+  bottom: 0;
+  height: 0.5px;
+  background: var(--ios-separator);
 }
 
 /* The other half of the draggable={false} fix in LinkRow. Safari has a long

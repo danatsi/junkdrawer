@@ -37,6 +37,11 @@ export interface Link {
    *  reasoned out by Gemini rather than looked up, since there's no API for
    *  "will I like it". */
   reassurance_score: number | null
+  /** One sentence saying why the score is what it is, in terms of the taste
+   *  profile — what the book is doing that this reader likes or doesn't.
+   *  Shown in the row's expanded panel, under the synopsis. Null wherever
+   *  `reassurance_score` is. */
+  reassurance_reason: string | null
   type: LinkType
   enrichment: EnrichmentState
   enrich_error: string | null

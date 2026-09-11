@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { motion, useMotionValue, animate, type PanInfo } from 'motion/react'
+import { motion, useMotionValue, useTransform, animate, type PanInfo } from 'motion/react'
 import styles from './SwipeableRow.module.css'
 
 /** Each action button's width, and so how far the row slides to uncover them.
@@ -51,6 +51,14 @@ export function SwipeableRow({
   children: React.ReactNode
 }) {
   const x = useMotionValue(0)
+  // Hidden whenever the row is home, rather than merely covered by it.
+  //
+  // The sheet is a composited layer the width of its container, and at the
+  // rounded corners of the group the two don't round the same half-pixel the
+  // same way — which let a sliver of the red Delete panel show through the
+  // first row's top corner on a row nobody had touched. Anything that
+  // isn't flush cannot show through something that isn't drawn.
+  const trayVisibility = useTransform(x, (offset) => (offset < -0.5 ? 'visible' : 'hidden'))
   // Whether the pointer actually travelled during this gesture. The row body
   // is a link, so the release at the end of a swipe lands as a click and opens
   // it — uncovering the actions and navigating away in the same motion.
@@ -85,7 +93,7 @@ export function SwipeableRow({
       {/* Behind the row, uncovered as it slides. Out of the reading order
           while shut: they're real buttons sitting under an opaque surface, and
           tabbing onto something invisible is worse than not reaching it. */}
-      <div className={styles.tray} aria-hidden={!open}>
+      <motion.div className={styles.tray} style={{ visibility: trayVisibility }} aria-hidden={!open}>
         <button
           type="button"
           className={styles.action}
@@ -102,7 +110,7 @@ export function SwipeableRow({
         >
           Delete
         </button>
-      </div>
+      </motion.div>
       <motion.div
         className={styles.sheet}
         style={{ x }}
