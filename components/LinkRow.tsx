@@ -29,7 +29,9 @@ export function LinkRow({
   const [retrying, setRetrying] = useState(false)
   const router = useRouter()
 
-  const isWatch = link.tags.includes('watch')
+  // Both give the row a score badge, and the same read at rest is the point:
+  // "how good is this" and "will I like this" render identically.
+  const hasScore = Boolean(link.imdb_rating) || link.reassurance_score !== null
   const primaryTag = link.tags[0] ?? null
   // Enrichment runs after the capture endpoint has already returned, so a row
   // is live and tappable before it has a title, a thumbnail or tags. Say so
@@ -70,7 +72,7 @@ export function LinkRow({
   ) : hasFailed ? (
     <span className={styles.failedNote}>couldn&apos;t fetch details</span>
   ) : primaryTag ? (
-    <span className={`${styles.tagPill} ${isWatch ? styles.tagWatch : ''}`}>{primaryTag}</span>
+    <span className={`${styles.tagPill} ${hasScore ? styles.tagScored : ''}`}>{primaryTag}</span>
   ) : null
 
   return (
@@ -124,10 +126,10 @@ export function LinkRow({
               >
                 {displayTitle(link)}
               </span>
-              {link.imdb_rating && (
+              {hasScore && (
                 <span className={styles.score}>
                   <StarIcon />
-                  {link.imdb_rating}
+                  {link.imdb_rating ?? `${link.reassurance_score}/10`}
                 </span>
               )}
             </div>

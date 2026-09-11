@@ -132,6 +132,9 @@ export async function enrich(link: EnrichTarget): Promise<void> {
     // is a real answer ("nothing in the vocabulary fits"), an empty keyword
     // list never is, so a thin retry mustn't wipe terms that already work.
     if (generated.keywords.length) update.keywords = generated.keywords
+    // Null whenever `tags` isn't `read` (see toResult in gemini.ts) — as real
+    // an answer as `tags` itself, so assigned the same way.
+    update.reassurance_score = generated.reassurance_score
 
     // 3. The watch sub-pipeline. An IMDb link resolved itself by id in 1b;
     //    everything else needs Gemini to have recognised a film or show, and
@@ -208,6 +211,7 @@ export async function enrichScreenshot(input: {
     if (generated.extracted_text) update.extracted_text = generated.extracted_text
     update.tags = generated.tags
     if (generated.keywords.length) update.keywords = generated.keywords
+    update.reassurance_score = generated.reassurance_score
 
     if (generated.tags.includes('watch')) {
       const movie = await fetchMovieData(generated.clean_title)

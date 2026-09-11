@@ -41,6 +41,7 @@ const base = {
   enrich_error: null,
   imdb_rating: null,
   trailer_url: null,
+  reassurance_score: null,
   extracted_text: null,
   image_kind: null,
   keywords: [] as string[],
@@ -228,6 +229,9 @@ export const MOCK_LINKS: Link[] = [
     note: 'אמא המליצה. לקנות לפני הטיסה.',
     image_kind: 'photo' as const, image_url: thumb('#DCCDB2', '#B59A6E'),
     tags: ['read'],
+    // Contemporary, funny, first-person romantic comedy — squarely the sweet
+    // spot the taste profile in lib/gemini.ts describes.
+    reassurance_score: 8,
     created_at: daysAgo(1),
     keywords: [
       'book',

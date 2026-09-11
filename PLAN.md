@@ -99,6 +99,7 @@ create table links (
   enrichment    text   not null default 'pending',  -- pending | ok | failed
   enrich_error  text,
   keywords      text[] not null default '{}',       -- bilingual search vocabulary (Phase 6)
+  reassurance_score smallint,                       -- 0-10, read-tagged books only
   created_at    timestamptz not null default now()
 );
 
@@ -174,6 +175,19 @@ Rows sorted `created_at desc`, `status = 'unread'` only.
 - Score badge + expanded description + trailer link (already in the mock).
 
 **Done when:** saving an IMDb or Netflix URL yields a row with a star badge and a working trailer link.
+
+### Reassurance score — the `read` sub-pipeline's counterpart to Phase 5
+Same shape as the watch score, but there's no TMDb/OMDb to ask "will I like this" — that's not a
+lookup, it's a taste judgment, so `lib/gemini.ts` asks the model directly instead of chaining to
+another service:
+- One fixed personal taste profile (single-user app) lives in the Gemini prompt (`READ_TASTE_PROFILE`)
+  and is folded into the same call that already writes tags and summary — no second request.
+- `reassurance_score`, 0-10, only when tags includes `read` and the row is a specific book (never a
+  store, list, or article about books); null otherwise, same as `imdb_rating` is null off `watch`.
+- Renders in the same score badge as the watch tag (`components/LinkRow.tsx` — `hasScore` covers both).
+
+**Done when:** saving a specific book comes back with a 0-10 badge reasoned from the taste profile,
+and a shopping or recipe row never shows one.
 
 ### Phase 6 — Polish (resolves the remaining spec §6 questions)
 - **Frontend gate** (§5 below) — do this before the URL is shared anywhere.

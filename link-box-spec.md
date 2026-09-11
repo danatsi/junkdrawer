@@ -63,6 +63,7 @@ Instagram blocks/limits server-side scraping of Open Graph metadata for Reels an
 | `status` | text | e.g. `unread` / `done` — used for archive/swipe actions |
 | `imdb_rating` | text | nullable, only populated for `watch`-tagged links |
 | `trailer_url` | text | nullable, only populated for `watch`-tagged links |
+| `reassurance_score` | smallint | nullable, 0-10, only populated for `read`-tagged links that are a specific book — see §3.3 step 3a |
 | `created_at` | timestamptz | |
 
 ### 3.3 Enrichment pipeline (runs per captured link)
@@ -80,6 +81,7 @@ Instagram blocks/limits server-side scraping of Open Graph metadata for Reels an
    - If the user's note is present, treat it as the primary signal for title/summary generation — it's usually a better indicator of intent than scraped page text.
    - If OG/yt-dlp data is thin or empty, instruct the model to infer from the URL structure/domain rather than refusing.
    - Note on Gemini's free tier: usage may be used by Google to improve their products (paid tier is excluded from this). Non-issue for personal use, worth knowing.
+   - **If tagged `read` and the row is a specific book**: the same call also returns `reassurance_score`, an integer 0-10. There's no TMDb/OMDb equivalent for "will I like this" — no API answers that — so the model reasons it out directly from one fixed personal taste profile embedded in the prompt (see `lib/gemini.ts`), the same way it already writes the tags and summary. Null/omitted for anything that isn't a specific book.
 4. **If tagged `watch`** (movie/TV): run the movie enrichment sub-pipeline —
    - **TMDb** (free): search by title (from clean_title or note) → get `overview` (description) and `imdb_id` (via external IDs) → get trailer via the videos endpoint (filter `type=Trailer`, `site=YouTube`) → construct `https://www.youtube.com/watch?v={key}`.
    - **OMDb** (free, 1,000 requests/day): look up by the `imdb_id` from TMDb → get the actual **IMDb rating** (distinct from TMDb's own `vote_average` — these read differently and IMDb's is what's wanted here).
@@ -155,12 +157,12 @@ thing in the list.
 ### 4.2 Row anatomy (collapsed — default state for every link type, including movies/TV)
 
 ```
-[thumbnail]  Title (serif, 15px)  [score badge if watch]     [WA icon] [chevron]
+[thumbnail]  Title (serif, 15px)  [score badge if scored]     [WA icon] [chevron]
              domain · tag (sans, 12px, secondary/accent)
 ```
 
 - Thumbnail: 40x40px, 6px radius, placeholder fill until a real image loads.
-- Score badge (watch-tagged only): small pill, accent-tinted background, star icon + number, sits inline next to the title — the *only* way a movie/TV row differs from others at rest. No description or trailer link is visible until expanded.
+- Score badge (watch-tagged links, and read-tagged books): small pill, accent-tinted background, star icon + number, sits inline next to the title — the *only* way a scored row differs from others at rest. A movie/TV row's number is the IMDb rating; a book's is the reassurance score (§3.3). No description or trailer link is visible until expanded.
 - Action column (right side, always two icons, no overflow/kebab menu): WhatsApp icon (direct tap → builds and opens the wa.me link) and a chevron (direct tap → toggles the expand panel). Both are independent, single-purpose taps — no intermediate menu for either.
 
 ### 4.3 Row interactions
@@ -294,7 +296,7 @@ Not yet implemented in code (tracked in Open Questions above): swipe-to-archive,
 - WhatsApp share for links is a client-side `wa.me` link — no backend or API key involved. For screenshots, sharing the actual image requires the Web Share API instead (see 5.6) — a different mechanism, one extra tap, not unifiable with `wa.me`.
 - Visual direction: ink — dark neutral ground, one bilingual sans, no accent hue, dense list rows
   (not cards/grid). Replaced a warm-cream/serif/terracotta treatment that read as templated.
-- All link types collapsed by default, including movies/TV — score badge is the only rest-state difference.
+- All link types collapsed by default, including movies/TV — score badge is the only rest-state difference. Books get the same badge, scored by taste rather than looked up (§3.3).
 - Row body opens the link; chevron expands details; WhatsApp is a direct button — no kebab/overflow menu anywhere in the row.
 - Row titles come from the page itself, not the model. The scrape's title with the site chrome cut off keeps a Hebrew page in Hebrew; Gemini only names a row when the scrape was unusable, and still owns tags and the summary either way.
 - One type family (IBM Plex Sans Hebrew) covers both scripts, so Hebrew and Latin match in weight by

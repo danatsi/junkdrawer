@@ -168,9 +168,9 @@
   border-radius: 5px;
 }
 
-/* Watch rows already carry a score badge; the brighter tag is the second half
-   of that signal, and the only tag that gets one. */
-.tagWatch {
+/* Rows with a score badge (watch, and read when it's a book) get the
+   brighter tag as the second half of that signal — the only tag that does. */
+.tagScored {
   color: var(--color-text-primary);
 }
 

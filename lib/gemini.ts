@@ -22,6 +22,9 @@ export interface GeminiResult {
   keywords: string[]
   /** Only populated by the image path — OCR'd text from the screenshot. */
   extracted_text?: string
+  /** 0-10, or null unless `tags` includes `read` and this is a specific
+   *  book — see READ_TASTE_PROFILE. */
+  reassurance_score: number | null
 }
 
 /**
@@ -98,6 +101,26 @@ function searchTermsRule(label: string): string {
   ].join('\n')
 }
 
+/**
+ * One fixed personal taste profile, used to score `read`-tagged books
+ * (single-user app — there is no other reader to profile). There's no
+ * external API for "will I like this", the way TMDb/OMDb answer "is this any
+ * good" for films, so the model reasons it out from this description instead
+ * of a lookup.
+ */
+const READ_TASTE_PROFILE = [
+  'Likes: contemporary, character-driven fiction, especially first-person / close POV; smart, ' +
+    'natural romance with believable chemistry and emotional depth; light and funny without being ' +
+    'overly sweet or formulaic; messy, real, witty, psychologically nuanced characters; ' +
+    'relationship stories with substance beyond will-they-won\'t-they; a warm, enjoyable read that ' +
+    'stays warm rather than turning sad, dark, scary or humiliating.',
+  'Dislikes: kitschy, cheesy or overly sentimental romance; the polished "American rom-com" feel ' +
+    'once it curdles into formula; a narrator who tells you what a character feels instead of ' +
+    'letting you experience it; stories that feel contrived, overly cute or emotionally ' +
+    'manipulative; fantasy and anything far from realistic contemporary life; sad, scary, ' +
+    'humiliating or bleak endings.',
+].join('\n')
+
 const RESPONSE_SCHEMA = {
   type: Type.OBJECT,
   properties: {
@@ -122,13 +145,23 @@ const RESPONSE_SCHEMA = {
         'At most one extra specific lowercase tag (e.g. "pasta", "denim", "sci-fi"). ' +
         'Empty string if nothing specific applies.',
     },
+    reassurance_score: {
+      type: Type.INTEGER,
+      description:
+        'Only meaningful when tags includes "read" AND this is a specific book (never a ' +
+        'store, reading list, or article about books in general) — otherwise always 0. ' +
+        'An integer 0 (avoid) to 10 (a lock): how confidently THIS reader, described below, ' +
+        'will enjoy THIS particular book. Reason only from the taste profile — never from ' +
+        'the book\'s general popularity, star rating or bestseller status.\n' +
+        READ_TASTE_PROFILE,
+    },
     // Last on purpose: the model has already committed to a title, a summary
     // and a tag by the time it writes these, so the terms describe what it
     // decided the thing is rather than leading that decision.
     search_terms: SEARCH_TERMS_PROPERTY,
   },
-  required: ['clean_title', 'summary', 'tags', 'freeform_tag', 'search_terms'],
-  propertyOrdering: ['clean_title', 'summary', 'tags', 'freeform_tag', 'search_terms'],
+  required: ['clean_title', 'summary', 'tags', 'freeform_tag', 'reassurance_score', 'search_terms'],
+  propertyOrdering: ['clean_title', 'summary', 'tags', 'freeform_tag', 'reassurance_score', 'search_terms'],
 }
 
 /** The image schema adds OCR. Kept separate rather than making extracted_text
@@ -301,6 +334,7 @@ interface RawResult {
   summary?: unknown
   tags?: unknown
   freeform_tag?: unknown
+  reassurance_score?: unknown
   search_terms?: unknown
   extracted_text?: unknown
 }
@@ -310,14 +344,24 @@ function toResult(raw: RawResult): GeminiResult {
     ? raw.tags.filter((t): t is string => typeof t === 'string')
     : []
   const freeform = typeof raw.freeform_tag === 'string' ? raw.freeform_tag : ''
+  const tags = normaliseTags(coreTags, freeform)
 
   return {
     clean_title: str(raw.clean_title),
     summary: str(raw.summary),
-    tags: normaliseTags(coreTags, freeform),
+    tags,
     keywords: normaliseKeywords(raw.search_terms),
     extracted_text: str(raw.extracted_text) || undefined,
+    // The model is asked for 0 on anything that isn't a book (see
+    // READ_TASTE_PROFILE) — that sentinel is only meaningful together with
+    // the tag, so it's dropped here rather than trusted on its own.
+    reassurance_score: tags.includes('read') ? clampScore(raw.reassurance_score) : null,
   }
+}
+
+function clampScore(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null
+  return Math.min(10, Math.max(0, Math.round(value)))
 }
 
 function buildImagePrompt(note: string | null): string {
@@ -341,12 +385,15 @@ function buildImagePrompt(note: string | null): string {
     '   words, sentence case.',
     `3. tags: choose from ${CORE_TAGS.join(', ')}. Usually exactly one. Omit rather than guess.`,
     '4. freeform_tag: at most one specific lowercase word for what this is.',
-    '5. summary: under 20 words describing what the screenshot shows.',
-    '6. extracted_text: every legible piece of text, verbatim, in reading order.',
-    searchTermsRule('7. search_terms:'),
-    '8. Write clean_title and summary in the language and script of the text in',
+    '5. reassurance_score: only if tags includes "read" and the image shows a',
+    '   specific book (a cover, a listing, a page of one) — otherwise 0.',
+    '   ' + READ_TASTE_PROFILE.replace(/\n/g, '\n   '),
+    '6. summary: under 20 words describing what the screenshot shows.',
+    '7. extracted_text: every legible piece of text, verbatim, in reading order.',
+    searchTermsRule('8. search_terms:'),
+    '9. Write clean_title and summary in the language and script of the text in',
     '   the image. Never transliterate it into Latin letters.',
-    '9. Never refuse. If the image is unclear, describe what you can see.',
+    '10. Never refuse. If the image is unclear, describe what you can see.',
     note
       ? `\nThe person's own note: "${note}"\n` +
         'Use it for the summary and the tags — it says why this was worth saving. ' +
@@ -466,6 +513,9 @@ function buildPrompt({
     'Rules:',
     `- tags: choose from ${CORE_TAGS.join(', ')}. Usually exactly one. Omit rather than guess.`,
     '- freeform_tag: at most one specific lowercase word for what this actually is.',
+    '- reassurance_score: only if tags includes "read" and this is a specific book (never a ' +
+      'store, reading list, or article about books in general) — otherwise 0.\n' +
+      READ_TASTE_PROFILE,
     searchTermsRule('- search_terms:'),
     '- clean_title: under 8 words, sentence case, no site name or marketing padding.',
     '- summary: under 20 words, one sentence, plain and factual.',

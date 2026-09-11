@@ -31,6 +31,12 @@ export interface Link {
   status: LinkStatus
   imdb_rating: string | null
   trailer_url: string | null
+  /** 0-10, `read`-tagged rows only: how confidently the fixed taste profile
+   *  in lib/gemini.ts predicts this specific book will land. Null for
+   *  anything that isn't a specific book — the watch tag's imdb_rating, but
+   *  reasoned out by Gemini rather than looked up, since there's no API for
+   *  "will I like it". */
+  reassurance_score: number | null
   type: LinkType
   enrichment: EnrichmentState
   enrich_error: string | null
