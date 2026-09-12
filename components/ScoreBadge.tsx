@@ -10,11 +10,25 @@ import styles from './LinkRow.module.css'
  * the screenshot row had already drifted into its own slightly different copy
  * once — it rendered the taste score and silently dropped the rating.
  *
- * A link when we know which title this is, plain text when we don't. Nothing
- * about the badge changes shape between those two cases: a rating that
- * sometimes has a chevron or an underline would make the ones without look
- * broken, and the tap target is the whole capsule either way.
+ * A rating always goes somewhere. It used to link only when `imdb_id` was
+ * known, which in practice meant almost never: that column is filled by
+ * enrichment or by the backfill route, so every row saved before either of
+ * those existed rendered as plain text. Tapping a rating did nothing, with
+ * nothing on screen to say why — and the badge had deliberately been made to
+ * look the same either way, which turned "this one has no id" into "this
+ * feature is broken".
+ *
+ * So the id is now an optimisation rather than a precondition: with it the
+ * link goes straight to the title, without it to IMDb's search for the title's
+ * own name, which lands one tap away. Only a row with no title at all can't
+ * be pointed anywhere.
  */
+function imdbHref(link: Link): string | null {
+  if (link.imdb_id) return `https://www.imdb.com/title/${link.imdb_id}/`
+  const title = link.title?.trim()
+  // s=tt keeps the results to titles rather than people and companies.
+  return title ? `https://www.imdb.com/find/?q=${encodeURIComponent(title)}&s=tt` : null
+}
 export function ScoreBadge({ link }: { link: Link }) {
   const rating = link.imdb_rating
   const value = rating ?? (link.reassurance_score !== null ? `${link.reassurance_score}/10` : null)
@@ -37,15 +51,17 @@ export function ScoreBadge({ link }: { link: Link }) {
     </>
   )
 
-  if (rating && link.imdb_id) {
+  const href = rating ? imdbHref(link) : null
+
+  if (href) {
     return (
       <a
         className={`${styles.score} ${styles.scoreLink}`}
-        href={`https://www.imdb.com/title/${link.imdb_id}/`}
+        href={href}
         target="_blank"
         rel="noopener noreferrer"
         draggable={false}
-        aria-label={`${label} — open on IMDb`}
+        aria-label={`${label} — ${link.imdb_id ? 'open' : 'find'} on IMDb`}
         // The row is a link too. Without this the tap opens the saved page
         // underneath as well as IMDb.
         onClick={(e) => e.stopPropagation()}
