@@ -130,10 +130,14 @@ a thumbnail. Values are never invented: if Apple publishes one, use theirs.
 
 Tint discipline, which is the part that needs saying:
 - **systemBlue** is every actionable control — bar buttons, Undo, Try again, Collapse all.
-- **systemRed** means one thing only: the delete action. No error text, no failed-row state,
-  no generated thumbnail may use it.
-- **systemYellow** marks a score, and nothing else.
-- Generated monogram tiles rotate through six system hues (red excluded, per above). The
+- **systemRed** is destructive or wrong, and nothing else: the delete action, and the error line
+  on a form. Never a thumbnail, never a score, and never a row's resting state — a failed row is
+  thin, not broken.
+- **systemYellow** is a rating's star. **systemPink** is the taste score's heart. Those are two
+  different kinds of claim (§4.2) and never share a colour or a glyph. Pink rather than red for
+  the heart: red here means the one control that destroys something, and "you'll probably enjoy
+  this" is the opposite of that.
+- Generated monogram tiles rotate through six system hues, red and pink excluded per above. The
   thumbnails are still the only saturated thing in a row.
 
 **Typography.** SF, via the system font stack — no webfont, so nothing to download and the
@@ -195,7 +199,8 @@ while the meta line under it stays put; only the ordering inside the line flips.
 ```
 
 - Thumbnail: 44x44px, 13px radius, placeholder fill until a real image loads.
-- Score badge (watch-tagged links, and read-tagged books): small pill, accent-tinted background, star icon + number, sits inline next to the title — the *only* way a scored row differs from others at rest. A movie/TV row's number is the IMDb rating; a book's is the reassurance score (§3.3). No description or trailer link is visible until expanded.
+- Score badge (watch-tagged links, and read-tagged books): small pill, accent-tinted background, glyph + number, sits inline next to the title — the *only* way a scored row differs from others at rest. No description or trailer link is visible until expanded.
+- **The two numbers get different glyphs**, because they are not the same kind of claim. A film's is a rating — a lot of people voted, and it's a star in systemYellow, which is what a rating looks like everywhere. A book's is a guess about one reader that nobody voted on, so it's a heart in systemPink. Sharing a star made them read as one measurement in two units.
 - **Tapping a rating opens the title on IMDb**, when `imdb_id` is known. The badge looks identical whether or not it links: a rating that sometimes carried a chevron or an underline would make every row without an id look broken, and the capsule is already a comfortable target. Only the accessible name differs, and it names the right service ("TMDb rating 8.7").
   This is why a row's own link is a *stretched* anchor on its title rather than a wrapper around the whole row (`LinkRow`): the badge is a link, and an anchor inside an anchor is invalid HTML that browsers resolve by breaking one of them. The badge and the two action buttons lift themselves above the stretched link on `z-index`; everything else in the row falls through to it.
 - Action column (right side, always two icons, no overflow/kebab menu): WhatsApp icon (direct tap → builds and opens the wa.me link) and a chevron (direct tap → toggles the expand panel). Both are independent, single-purpose taps — no intermediate menu for either.

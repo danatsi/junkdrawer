@@ -195,6 +195,13 @@
   color: var(--ios-yellow);
 }
 
+/* The taste score's heart. systemPink rather than systemRed: red on this
+   platform means the one control that destroys something, and a badge saying
+   you'll probably enjoy a book is the opposite of that. */
+.score.scoreLove svg {
+  color: var(--ios-pink);
+}
+
 /* Deliberately identical to the badge that isn't a link. A rating that only
    sometimes carried a chevron or an underline would make every row without an
    imdb_id look broken, and the capsule is already a comfortable target. */

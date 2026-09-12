@@ -1,5 +1,5 @@
 import type { Link } from '@/lib/types'
-import { StarIcon } from './Icons'
+import { HeartIcon, StarIcon } from './Icons'
 import styles from './LinkRow.module.css'
 
 /**
@@ -22,14 +22,17 @@ export function ScoreBadge({ link }: { link: Link }) {
 
   // TMDb's average and IMDb's read differently, so the row says which it has
   // rather than letting a TMDb number pass as IMDb's. Only in the accessible
-  // name — on screen it's a star and a number either way.
+  // name — on screen both are a star and a number.
   const label = rating
     ? `${link.rating_source === 'tmdb' ? 'TMDb' : 'IMDb'} rating ${rating}`
-    : `Reassurance score ${link.reassurance_score} out of 10`
+    : `How much you'll like this: ${link.reassurance_score} out of 10`
 
+  // A star is what a rating is, everywhere. The book number is not a rating —
+  // nobody voted on it, it's a guess about one reader — so it gets a heart,
+  // and the two stop looking like the same measurement in different units.
   const body = (
     <>
-      <StarIcon />
+      {rating ? <StarIcon /> : <HeartIcon />}
       {value}
     </>
   )
@@ -53,7 +56,7 @@ export function ScoreBadge({ link }: { link: Link }) {
   }
 
   return (
-    <span className={styles.score} aria-label={label}>
+    <span className={`${styles.score} ${rating ? '' : styles.scoreLove}`} aria-label={label}>
       {body}
     </span>
   )

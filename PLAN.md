@@ -212,8 +212,19 @@ another service:
   It's kept out of `description`, which holds the book's own synopsis — that field is about the
   book, this one is about the reader, and `description` is also what the search index and the
   watch pipeline write.
-- Renders in the same score badge as the watch tag (`components/LinkRow.tsx` — `hasScore` covers
-  both), with the reasoning in the row's expanded panel, set off by a leading rule.
+- Renders in the same score badge as the watch tag (`components/ScoreBadge.tsx`, shared by both row
+  types), with the reasoning in the row's expanded panel, set off by a leading rule. The glyph
+  differs though — a heart, not the rating's star (spec §4.2).
+- **`POST /api/backfill-books`** scores books that were saved before any of this existed. The score
+  is normally one field of the big enrichment call, and re-running that over an old row would
+  re-scrape the page and overwrite a good title — the objection `/api/reindex` documents — so
+  `generateReassurance` asks only the missing question, from the title, summary, note and OCR the
+  row already has. `read` covers articles and shops as well as books, so the model returns
+  `is_book` explicitly and rows that aren't one are left null rather than given a meaningless
+  number; they're reported as `skipped`, which is what explains a `remaining` that never reaches
+  zero.
+  `is_book` is asked for rather than inferred from a score of 0 because, in this call, there's no
+  `tags` array arriving alongside to tell "you'd hate this" apart from "this isn't a book".
 
 **Done when:** saving a specific book comes back with a 0-10 badge reasoned from the taste profile
 and a sentence in its panel saying why, and a shopping or recipe row never shows either.

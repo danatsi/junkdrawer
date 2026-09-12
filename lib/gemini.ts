@@ -282,6 +282,106 @@ const SEARCH_TERMS_SCHEMA = {
   required: ['search_terms'],
 }
 
+/**
+ * The taste score on its own, for a row that's already saved.
+ *
+ * Same reasoning as `generateSearchTerms` above: the score is normally a field
+ * of the big enrichment call, and re-running that over an old row would
+ * re-scrape the page, re-upload the thumbnail and overwrite a good title with
+ * whatever the site serves today. This asks only the question that's missing,
+ * from what the row already has.
+ *
+ * `is_book` is asked for explicitly rather than inferred from a score of 0,
+ * because a genuine 0 ("you would hate this") and "this is a bookshop, not a
+ * book" are different answers that the sentinel cannot tell apart — and here,
+ * unlike in the main call, there's no `tags` array arriving alongside to
+ * disambiguate them.
+ */
+const REASSURANCE_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    is_book: {
+      type: Type.BOOLEAN,
+      description:
+        'True only if this row is one specific book — a novel, a memoir, a title someone ' +
+        'could go and read. False for a bookshop, a reading list, a magazine or newspaper ' +
+        'article, an author profile, or anything that is not a single book.',
+    },
+    reassurance_score: {
+      type: Type.INTEGER,
+      description:
+        'An integer 0 (avoid) to 10 (a lock): how confidently THIS reader, described below, ' +
+        'will enjoy THIS particular book. Reason only from the taste profile — never from the ' +
+        "book's general popularity, star rating or bestseller status. 0 when is_book is false.\n" +
+        READ_TASTE_PROFILE,
+    },
+    reassurance_reason: {
+      type: Type.STRING,
+      description:
+        'The case for that score, in one sentence under 25 words, addressed to the reader as ' +
+        '"you". Name what this book actually does — its POV, its humour, how the romance is ' +
+        'written, how dark it gets — and tie it to a specific like or dislike above. Say the ' +
+        'reservation out loud when there is one. Never mention scores, taste profiles or the ' +
+        'word "reassurance". Empty string when is_book is false.',
+    },
+  },
+  required: ['is_book', 'reassurance_score', 'reassurance_reason'],
+  propertyOrdering: ['is_book', 'reassurance_score', 'reassurance_reason'],
+}
+
+export interface ReassuranceResult {
+  is_book: boolean
+  score: number | null
+  reason: string | null
+}
+
+export async function generateReassurance(input: {
+  url: string
+  domain: string | null
+  title: string | null
+  description: string | null
+  note: string | null
+  extracted_text: string | null
+}): Promise<ReassuranceResult> {
+  const raw = await withRetry(() => attempt(buildReassurancePrompt(input), REASSURANCE_SCHEMA))
+  if (raw.is_book !== true) return { is_book: false, score: null, reason: null }
+  return {
+    is_book: true,
+    score: clampScore(raw.reassurance_score),
+    reason: str(raw.reassurance_reason) || null,
+  }
+}
+
+function buildReassurancePrompt(input: {
+  url: string
+  domain: string | null
+  title: string | null
+  description: string | null
+  note: string | null
+  extracted_text: string | null
+}): string {
+  return [
+    'Something is already saved in a personal link drawer, tagged as reading.',
+    'Work out whether it is one specific book, and if so how much this reader will like it.',
+    '',
+    `url: ${input.url}`,
+    input.domain && `domain: ${input.domain}`,
+    input.title && `title: ${input.title}`,
+    input.description && `summary: ${input.description}`,
+    input.note && `the person's own note: "${input.note}"`,
+    // Truncated for the same reason the search-terms prompt truncates it: a
+    // full-page screenshot's OCR runs to thousands of characters and the first
+    // few hundred are what says what it is.
+    input.extracted_text && `text in the image: ${input.extracted_text.slice(0, 600)}`,
+    '',
+    'Judge the book you can identify from the above. If you cannot tell which book it is, or',
+    'it is not a single book, set is_book false and stop — a guess about the wrong book is',
+    'worse than no score at all.',
+  ]
+    .filter(Boolean)
+    .join('\n')
+}
+
 export async function generateSearchTerms(input: {
   url: string
   domain: string | null
@@ -367,6 +467,7 @@ interface RawResult {
   freeform_tag?: unknown
   reassurance_score?: unknown
   reassurance_reason?: unknown
+  is_book?: unknown
   search_terms?: unknown
   extracted_text?: unknown
 }
