@@ -49,11 +49,18 @@ export function isTmdbConfigured(): boolean {
 }
 
 export async function fetchMovieData(title: string): Promise<MovieData> {
+  if (!title.trim()) return {}
   const tmdbKey = process.env.TMDB_API_KEY
-  if (!tmdbKey || !title.trim()) return {}
 
-  const hit = await search(title, tmdbKey)
-  if (!hit) return {}
+  const hit = tmdbKey ? await search(title, tmdbKey) : undefined
+  // TMDb not knowing the title used to end the whole chain, which meant OMDb
+  // was never asked — it is only ever reached through an imdb_id that TMDb
+  // hands over. So a title TMDb hadn't indexed yet, or knows under a different
+  // name, got no rating even when OMDb had one all along. Ask it directly.
+  if (!hit) {
+    console.info(`movies: no TMDb match for "${title}", trying OMDb by title`)
+    return fetchByTitleFromOmdb(title)
+  }
 
   // Independent of each other, so there's no reason to wait serially.
   const [externalIds, videos] = await Promise.all([
@@ -66,7 +73,19 @@ export async function fetchMovieData(title: string): Promise<MovieData> {
   ])
 
   const imdbId = externalIds?.imdb_id || undefined
-  const rating = pickRating(imdbId ? (await fetchOmdb(imdbId))?.rating : undefined, hit.vote_average)
+  const rating = pickRating(
+    imdbId ? (await fetchOmdb({ imdbId }))?.rating : undefined,
+    hit.vote_average,
+  )
+
+  if (!rating) {
+    // The legitimate no-rating case, and the common one for something that
+    // just came out: TMDb has the title but nobody has voted on it yet, and
+    // OMDb withholds a rating until a title has enough votes. Logged because
+    // the row that results — poster and description, no number — is otherwise
+    // indistinguishable from a lookup that went wrong.
+    console.info(`movies: "${title}" matched TMDb but neither service has a rating yet`)
+  }
 
   return {
     description: hit.overview?.trim() || undefined,
@@ -129,7 +148,7 @@ export function extractImdbId(rawUrl: string): string | undefined {
 export async function fetchMovieDataByImdbId(imdbId: string): Promise<MovieData> {
   const tmdbKey = process.env.TMDB_API_KEY
   const [omdb, hit] = await Promise.all([
-    fetchOmdb(imdbId),
+    fetchOmdb({ imdbId }),
     tmdbKey ? findByImdbId(imdbId, tmdbKey) : undefined,
   ])
 
@@ -216,6 +235,10 @@ interface TmdbFound {
 interface TmdbHit {
   id: number
   media_type: 'movie' | 'tv'
+  /** Films carry `title`, shows carry `name` — both are needed to tell an
+   *  exact match from a popular near-miss. */
+  title?: string
+  name?: string
   overview?: string
   popularity?: number
   poster_path?: string | null
@@ -234,9 +257,27 @@ async function search(title: string, key: string): Promise<TmdbHit | undefined> 
   const data = await getJson<{ results?: (TmdbHit & { media_type?: string })[] }>(url)
 
   // /search/multi also returns people, which have no overview or trailer.
-  return data?.results?.find(
+  const candidates = (data?.results ?? []).filter(
     (r): r is TmdbHit => r.media_type === 'movie' || r.media_type === 'tv',
   )
+
+  // An exact title match beats the top result. TMDb orders /search/multi by
+  // popularity, so taking the first hit — which is what this did — hands a
+  // brand-new show to whatever older film or series happens to share its name
+  // and outrank it. That failure is quiet and convincing: a real poster and a
+  // real rating, for the wrong thing.
+  const wanted = comparable(title)
+  return candidates.find((r) => comparable(r.title ?? r.name ?? '') === wanted) ?? candidates[0]
+}
+
+/** Enough to make "The Good Daughter" and "the good daughter" the same title,
+ *  and to survive the curly apostrophe a scraped page is likely to carry. */
+function comparable(title: string): string {
+  return title
+    .trim()
+    .toLowerCase()
+    .replace(/[‘’ʼ]/g, "'")
+    .replace(/\s+/g, ' ')
 }
 
 /** Prefers an official YouTube trailer, then any YouTube trailer, then any
@@ -255,18 +296,65 @@ interface OmdbData {
   title?: string
   plot?: string
   rating?: string
+  imdbId?: string
+  poster?: string
 }
 
-async function fetchOmdb(imdbId: string): Promise<OmdbData | undefined> {
+/**
+ * The whole lookup from OMDb's own title search, for when TMDb didn't
+ * recognise the name at all.
+ *
+ * Thinner than the TMDb path by nature — OMDb has no trailer — but it still
+ * yields the rating, the synopsis, the imdb_id that makes the badge a direct
+ * link, and a poster. Which beats the empty object this used to return.
+ */
+async function fetchByTitleFromOmdb(title: string): Promise<MovieData> {
+  const omdb = await fetchOmdb({ title })
+  if (!omdb) {
+    console.info(`movies: OMDb has no title matching "${title}" either`)
+    return {}
+  }
+
+  const rating = pickRating(omdb.rating, undefined)
+  return {
+    description: omdb.plot,
+    imdb_rating: rating?.value,
+    rating_source: rating?.source,
+    imdb_id: omdb.imdbId,
+    // OMDb serves posters from its own host rather than TMDb's, but it's the
+    // same kind of thing and gets the same treatment — copied into our bucket
+    // by the caller rather than hot-linked.
+    poster_url: omdb.poster,
+  }
+}
+
+/** By imdb_id when TMDb gave us one, by title when it didn't. Same response
+ *  shape either way, so the two callers read it identically. */
+async function fetchOmdb(by: { imdbId: string } | { title: string }): Promise<OmdbData | undefined> {
   const key = process.env.OMDB_API_KEY
   if (!key) return undefined
 
-  const data = await getJson<{ Title?: string; Plot?: string; imdbRating?: string }>(
-    `https://www.omdbapi.com/?apikey=${key}&i=${encodeURIComponent(imdbId)}`,
-  )
-  if (!data) return undefined
+  const lookup =
+    'imdbId' in by ? `i=${encodeURIComponent(by.imdbId)}` : `t=${encodeURIComponent(by.title)}`
+  const data = await getJson<{
+    Response?: string
+    Title?: string
+    Plot?: string
+    imdbRating?: string
+    imdbID?: string
+    Poster?: string
+  }>(`https://www.omdbapi.com/?apikey=${key}&${lookup}`)
+  // A title search that found nothing is a 200 with Response: "False", not an
+  // error status, so it has to be checked rather than assumed.
+  if (!data || data.Response === 'False') return undefined
 
-  return { title: usable(data.Title), plot: usable(data.Plot), rating: usable(data.imdbRating) }
+  return {
+    title: usable(data.Title),
+    plot: usable(data.Plot),
+    rating: usable(data.imdbRating),
+    imdbId: usable(data.imdbID),
+    poster: usable(data.Poster),
+  }
 }
 
 /** OMDb returns the string "N/A" rather than omitting a field. */
