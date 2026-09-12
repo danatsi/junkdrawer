@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import type { Link } from '@/lib/types'
+import { CORE_TAGS, type Link } from '@/lib/types'
 import { displayTitle } from '@/lib/types'
 import { ChevronIcon, ShareIcon, StarIcon } from './Icons'
 import { ImageViewer } from './ImageViewer'
@@ -29,7 +29,20 @@ export function ScreenshotRow({
   const [viewerOpen, setViewerOpen] = useState(false)
   const [shareError, setShareError] = useState<string | null>(null)
 
+  // The screenshot itself: still the artefact, so the panel and the viewer
+  // keep showing it whatever the row's thumbnail ends up being.
   const image = link.image_url
+  // What identifies the row in the list. A screenshot of a streaming app at
+  // 44px is an unreadable smear that looks like every other screenshot; once
+  // enrichment has worked out which show it is, its poster says so at a
+  // glance.
+  const thumbnail = link.poster_url ?? image
+  // A screenshot can be of anything, and when it's of a film or show it took
+  // the whole watch pipeline to get here — rating included. This row used to
+  // hardcode the pill to "screenshot" and drop the rating on the floor, so a
+  // saved show looked exactly like a saved receipt.
+  const primaryTag = CORE_TAGS.find((tag) => link.tags.includes(tag))
+  const hasScore = Boolean(link.imdb_rating) || link.reassurance_score !== null
 
   async function share(e: React.MouseEvent) {
     e.stopPropagation()
@@ -56,9 +69,9 @@ export function ScreenshotRow({
     <>
       <div className={`${styles.row} ${styles.rowClickable}`} onClick={onToggle}>
         <div className={styles.rowToggle}>
-          {image ? (
+          {thumbnail ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img className={styles.thumb} src={image} alt="" loading="lazy" draggable={false} />
+            <img className={styles.thumb} src={thumbnail} alt="" loading="lazy" draggable={false} />
           ) : (
             <div className={styles.thumb} />
           )}
@@ -69,18 +82,24 @@ export function ScreenshotRow({
               <span dir="auto" className={styles.title}>
                 {displayTitle(link)}
               </span>
-              {/* A screenshot of a book cover reaches the same taste scoring a
-                  pasted link does — the vision path writes both fields — so it
-                  gets the same badge. */}
-              {link.reassurance_score !== null && (
+              {/* A screenshot of a poster or a book cover reaches the same
+                  lookups a pasted link does — the vision path feeds both the
+                  watch chain and the taste scoring — so it gets the same
+                  badge. */}
+              {hasScore && (
                 <span className={styles.score}>
                   <StarIcon />
-                  {`${link.reassurance_score}/10`}
+                  {link.imdb_rating ?? `${link.reassurance_score}/10`}
                 </span>
               )}
             </div>
             <div className={styles.meta}>
-              <span className={`${styles.tagPill} ${styles.tagAccent}`}>screenshot</span>
+              {/* What it is, when we worked that out, and only otherwise how it
+                  arrived. "Screenshot" is how it got here, not what it's about,
+                  and it was the only thing this row ever said. */}
+              <span className={`${styles.tagPill} ${styles.tagAccent}`}>
+                {primaryTag ?? 'screenshot'}
+              </span>
             </div>
           </div>
         </div>
@@ -126,10 +145,25 @@ export function ScreenshotRow({
                 }}
               />
             )}
-            <div dir="auto">
+            <div dir="auto" className={styles.panelStack}>
               {link.description ?? link.note}
               {link.reassurance_reason && (
                 <p className={styles.reason}>{link.reassurance_reason}</p>
+              )}
+              {/* Same chain as a pasted IMDb link, so the same way out of the
+                  row. Only the thumbnail above knows this started as a
+                  screenshot. */}
+              {link.trailer_url && (
+                <a
+                  className={styles.trailerLink}
+                  href={link.trailer_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  draggable={false}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Watch trailer
+                </a>
               )}
               {shareError && <div className={styles.note}>{shareError}</div>}
             </div>

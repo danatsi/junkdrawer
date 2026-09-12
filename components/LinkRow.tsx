@@ -46,6 +46,10 @@ export function LinkRow({
   // anchor, and a <button> can't nest in an <a>.
   const hasPanel = Boolean(link.note || link.description || link.reassurance_reason || hasFailed)
   const thumb = generatedThumb(link)
+  // A film or show's own poster beats whatever the page put in og:image —
+  // usually a streaming service's wide hero crop, often nothing at all
+  // because the site blocked the scrape.
+  const thumbnail = link.poster_url ?? (link.image_kind === 'photo' ? link.image_url : null)
 
   async function retry(e: React.MouseEvent) {
     e.stopPropagation()
@@ -90,13 +94,13 @@ export function LinkRow({
           rel="noopener noreferrer"
           draggable={false}
         >
-          {link.image_url && link.image_kind === 'photo' ? (
-            // Arbitrary scraped hosts, and these are 40px — next/image's
+          {thumbnail ? (
+            // Arbitrary scraped hosts, and these are 44px — next/image's
             // optimizer would cost more than it saves here.
             // eslint-disable-next-line @next/next/no-img-element
             <img
               className={styles.thumb}
-              src={link.image_url}
+              src={thumbnail}
               alt=""
               loading="lazy"
               draggable={false}

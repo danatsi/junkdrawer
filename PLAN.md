@@ -101,6 +101,7 @@ create table links (
   keywords      text[] not null default '{}',       -- bilingual search vocabulary (Phase 6)
   reassurance_score smallint,                       -- 0-10, read-tagged books only
   reassurance_reason text,                          -- one sentence saying why, moves with the score
+  poster_url    text,                               -- the show's own poster; outranks image_url as the thumbnail
   created_at    timestamptz not null default now()
 );
 
@@ -174,6 +175,13 @@ Rows sorted `created_at desc`, `status = 'unread'` only.
 - Runs only when Gemini returned the `watch` tag. Every step optional — no trailer or no rating degrades
   to a normal row rather than failing the save.
 - Score badge + expanded description + trailer link (already in the mock).
+- Also fetches the **poster** and copies it into our own bucket, on the same reasoning the scraped
+  product image gets: hot-linking image.tmdb.org would tell TMDb which shows are in the drawer on
+  every render. It becomes the row's thumbnail, outranking `image_url`.
+- This chain keys off the `watch` tag and the title and has no idea where either came from, so a
+  **screenshot** of a film or show reaches all of it (spec §5.5). That was already true for the
+  rating and the trailer — the screenshot row just rendered neither, and hardcoded its tag pill to
+  the word "screenshot", so a saved show looked exactly like a saved receipt.
 
 **Done when:** saving an IMDb or Netflix URL yields a row with a star badge and a working trailer link.
 

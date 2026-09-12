@@ -18,10 +18,22 @@ export interface MovieData {
   description?: string
   imdb_rating?: string
   trailer_url?: string
+  /** The show's own poster. For a screenshot row this is the whole point: what
+   *  was saved is a photograph of a phone screen, and the thing it's *about*
+   *  has a picture of its own that identifies it in a 44px square. */
+  poster_url?: string
 }
 
 const TIMEOUT_MS = 5_000
 const TMDB = 'https://api.themoviedb.org/3'
+
+/** w342 rather than the original file. The largest this is ever drawn is a
+ *  56px panel thumbnail, and an original poster is several MB. */
+const POSTER_BASE = 'https://image.tmdb.org/t/p/w342'
+
+function posterUrl(path: string | null | undefined): string | undefined {
+  return path ? `${POSTER_BASE}${path}` : undefined
+}
 
 export function isTmdbConfigured(): boolean {
   return Boolean(process.env.TMDB_API_KEY)
@@ -50,6 +62,7 @@ export async function fetchMovieData(title: string): Promise<MovieData> {
     description: hit.overview?.trim() || undefined,
     trailer_url: pickTrailer(videos?.results),
     imdb_rating: imdbId ? (await fetchOmdb(imdbId))?.rating : undefined,
+    poster_url: posterUrl(hit.poster_path),
   }
 }
 
@@ -97,6 +110,7 @@ export async function fetchMovieDataByImdbId(imdbId: string): Promise<MovieData>
     description: hit?.overview?.trim() || omdb?.plot,
     imdb_rating: omdb?.rating,
     trailer_url: pickTrailer(videos?.results),
+    poster_url: posterUrl(hit?.poster_path),
   }
 }
 
@@ -105,16 +119,41 @@ export async function fetchMovieDataByImdbId(imdbId: string): Promise<MovieData>
 async function findByImdbId(
   imdbId: string,
   key: string,
-): Promise<{ id: number; media_type: 'movie' | 'tv'; title?: string; overview?: string } | undefined> {
+): Promise<
+  | {
+      id: number
+      media_type: 'movie' | 'tv'
+      title?: string
+      overview?: string
+      poster_path?: string | null
+    }
+  | undefined
+> {
   const data = await getJson<{ movie_results?: TmdbFound[]; tv_results?: TmdbFound[] }>(
     `${TMDB}/find/${encodeURIComponent(imdbId)}?api_key=${key}&external_source=imdb_id`,
   )
 
   const movie = data?.movie_results?.[0]
-  if (movie) return { id: movie.id, media_type: 'movie', title: movie.title, overview: movie.overview }
+  if (movie) {
+    return {
+      id: movie.id,
+      media_type: 'movie',
+      title: movie.title,
+      overview: movie.overview,
+      poster_path: movie.poster_path,
+    }
+  }
 
   const tv = data?.tv_results?.[0]
-  if (tv) return { id: tv.id, media_type: 'tv', title: tv.name, overview: tv.overview }
+  if (tv) {
+    return {
+      id: tv.id,
+      media_type: 'tv',
+      title: tv.name,
+      overview: tv.overview,
+      poster_path: tv.poster_path,
+    }
+  }
 
   return undefined
 }
@@ -125,6 +164,7 @@ interface TmdbFound {
   title?: string
   name?: string
   overview?: string
+  poster_path?: string | null
 }
 
 interface TmdbHit {
@@ -132,6 +172,7 @@ interface TmdbHit {
   media_type: 'movie' | 'tv'
   overview?: string
   popularity?: number
+  poster_path?: string | null
 }
 
 interface TmdbVideo {

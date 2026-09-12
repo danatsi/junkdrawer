@@ -356,6 +356,17 @@
   padding-left: 0;
 }
 
+/* The text column beside a screenshot's thumbnail. `panelInner` is already a
+   flex column, but `panelWithThumb` turns it on its side to seat the
+   thumbnail, so the stacking has to happen again one level in — without it
+   the trailer link ran straight on from the last word of the synopsis. */
+.panelStack {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+
 .panelThumb {
   width: 56px;
   height: 56px;

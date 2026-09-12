@@ -77,11 +77,12 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 })
   }
 
-  // Read the image reference before the row goes: it's the only record of
-  // which object in the bucket belonged to this row.
+  // Read the image references before the row goes: they're the only record of
+  // which objects in the buckets belonged to this row. A watch-tagged
+  // screenshot has two — the screenshot and the show's poster.
   const { data } = await getSupabase()
     .from('links')
-    .select('image_url')
+    .select('image_url, poster_url')
     .eq('id', id)
     .maybeSingle()
 
@@ -98,8 +99,9 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   // largest thing this app stores and orphaning it would be invisible, but a
   // bucket that refuses the delete is no reason to tell the client the row is
   // still there when it isn't.
-  const ref = parseStorageRef((data?.image_url as string | null) ?? null)
-  if (ref) {
+  for (const value of [data?.image_url, data?.poster_url]) {
+    const ref = parseStorageRef((value as string | null) ?? null)
+    if (!ref) continue
     try {
       await removeImage(ref.bucket, ref.path)
     } catch (cause) {

@@ -1,0 +1,21 @@
+-- The poster of the film or show a row is about, as distinct from the picture
+-- the row already has.
+--
+-- This exists for screenshot rows. What gets saved there is a photograph of a
+-- phone screen — a streaming app's detail page, a review, a still — and at
+-- 44px that is an unreadable smear that looks like every other screenshot in
+-- the list. The thing it is *about* has a picture of its own that identifies
+-- it instantly.
+--
+-- A separate column rather than overwriting `image_url`, because the
+-- screenshot is still the artefact: it's what the panel shows, what the
+-- full-screen viewer opens, and the only copy of whatever text was on that
+-- screen. The poster is how the row is recognised; the screenshot is what the
+-- row holds.
+--
+-- Stored as a `storage:` reference like every other image we host (see
+-- lib/storage.ts), not as an image.tmdb.org URL: hot-linking would have the
+-- browser fetch from TMDb on every render, telling TMDb which shows are in
+-- your drawer. Same objection lib/enrich.ts already makes to hot-linking a
+-- retailer's CDN.
+alter table links add column if not exists poster_url text;

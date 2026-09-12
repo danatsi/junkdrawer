@@ -153,6 +153,8 @@ export async function enrich(link: EnrichTarget): Promise<void> {
       // Only the by-id path sets a title, and there it's the canonical one —
       // this row *is* that film or show, so it outranks a rephrasing of it.
       if (movie.title) update.title = movie.title
+      const poster = await persistPoster(movie.poster_url)
+      if (poster) update.poster_url = poster
     }
 
     // No usable photo — most large retailers block scraping entirely, so this
@@ -222,6 +224,11 @@ export async function enrichScreenshot(input: {
       if (movie.description) update.description = movie.description
       if (movie.imdb_rating) update.imdb_rating = movie.imdb_rating
       if (movie.trailer_url) update.trailer_url = movie.trailer_url
+      // The reason this path matters most: `image_url` here is the screenshot
+      // itself, which at 44px is an unreadable smear of somebody's phone
+      // screen. The poster is what makes the row recognisable as the show.
+      const poster = await persistPoster(movie.poster_url)
+      if (poster) update.poster_url = poster
     }
 
     await save(input.id, { ...update, enrichment: 'ok', enrich_error: null })
@@ -234,6 +241,21 @@ export async function enrichScreenshot(input: {
       enrich_error: message.slice(0, 500),
     })
   }
+}
+
+/**
+ * Copies a TMDb poster into our own bucket, on the same reasoning the scraped
+ * product image gets: hot-linking image.tmdb.org would have the browser fetch
+ * from TMDb on every render, telling TMDb which shows are in the drawer.
+ * Doing it here spends one request at enrichment time instead of one per
+ * render, and leaves the thumbnail working with no external requests at all.
+ *
+ * Best-effort, like everything else in the watch chain — a row with a rating
+ * and no poster is still a good row.
+ */
+async function persistPoster(posterUrl: string | undefined): Promise<string | null> {
+  if (!posterUrl) return null
+  return persistScrapedImage(posterUrl)
 }
 
 /** A product photo, not a screenshot — generous enough for a retailer's

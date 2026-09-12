@@ -31,6 +31,12 @@ export interface Link {
   status: LinkStatus
   imdb_rating: string | null
   trailer_url: string | null
+  /** The film or show's own poster, `watch`-tagged rows only. Outranks
+   *  `image_url` as the row's thumbnail — on a screenshot row especially,
+   *  where `image_url` is a photograph of a phone screen and this is the
+   *  picture that says which show it is. `image_url` still holds the
+   *  screenshot, which is what the panel and the viewer show. */
+  poster_url: string | null
   /** 0-10, `read`-tagged rows only: how confidently the fixed taste profile
    *  in lib/gemini.ts predicts this specific book will land. Null for
    *  anything that isn't a specific book — the watch tag's imdb_rating, but

@@ -30,6 +30,13 @@ function screenshot(): string {
   return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`
 }
 
+/** Portrait, and in a colour no other placeholder uses, so a row wearing a
+ *  poster is obviously not wearing its own screenshot. */
+function poster(): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="342" height="513"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3D5A80"/><stop offset="1" stop-color="#16222E"/></linearGradient></defs><rect width="342" height="513" fill="url(#g)"/><rect x="34" y="380" width="200" height="18" rx="9" fill="#F1ECE2" opacity="0.85"/><rect x="34" y="416" width="130" height="14" rx="7" fill="#F1ECE2" opacity="0.55"/></svg>`
+  return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`
+}
+
 function daysAgo(n: number): string {
   return new Date(Date.now() - n * 86_400_000).toISOString()
 }
@@ -41,6 +48,7 @@ const base = {
   enrich_error: null,
   imdb_rating: null,
   trailer_url: null,
+  poster_url: null,
   reassurance_score: null,
   reassurance_reason: null,
   extracted_text: null,
@@ -383,6 +391,43 @@ export const MOCK_LINKS: Link[] = [
       'אינסטגרם',
     ],
     created_at: daysAgo(2),
+  },
+  {
+    ...base,
+    id: '16',
+    type: 'screenshot',
+    url: '',
+    domain: null,
+    // The row this whole change exists for. What was saved is a photograph of
+    // a streaming app, which at 44px is an unreadable smear indistinguishable
+    // from every other screenshot in the list. Enrichment recognised the show,
+    // so the row wears the show's poster and its IMDb rating and files itself
+    // under watch — while `image_url` still holds the screenshot, which is
+    // what the panel and the full-screen viewer show.
+    title: 'Slow Horses',
+    description:
+      'A dysfunctional team of MI5 agents exiled to Slough House for their career-ending mistakes.',
+    note: null,
+    image_kind: 'photo' as const,
+    image_url: screenshot(),
+    poster_url: poster(),
+    tags: ['watch'],
+    imdb_rating: '8.3',
+    trailer_url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+    extracted_text: 'Slow Horses\nSeason 4\nApple TV+\n6 episodes',
+    keywords: [
+      'slow horses',
+      'סלואו הורסס',
+      'series',
+      'סדרה',
+      'spy',
+      'ריגול',
+      'mi5',
+      'apple tv',
+      'thriller',
+      'מותחן',
+    ],
+    created_at: daysAgo(1),
   },
   {
     ...base,

@@ -38,17 +38,23 @@ async function getLinks(): Promise<Link[]> {
  * `image_url` holds two different kinds of thing.
  */
 async function withResolvedImages(links: Link[]): Promise<Link[]> {
+  // Both image fields, in one batch. A watch-tagged screenshot carries two
+  // hosted images at once — the screenshot and the show's poster — and signing
+  // them in separate passes would double the round-trips for no gain.
   const refs = links
-    .map((l) => l.image_url)
+    .flatMap((l) => [l.image_url, l.poster_url])
     .filter((url): url is string => Boolean(url?.startsWith('storage:')))
   if (refs.length === 0) return links
 
   const resolved = await resolveImageRefs(refs)
-  return links.map((l) =>
-    l.image_url?.startsWith('storage:')
-      ? { ...l, image_url: resolved.get(l.image_url) ?? null }
-      : l,
-  )
+  const swap = (url: string | null) =>
+    url?.startsWith('storage:') ? (resolved.get(url) ?? null) : url
+
+  return links.map((l) => ({
+    ...l,
+    image_url: swap(l.image_url),
+    poster_url: swap(l.poster_url),
+  }))
 }
 
 export default async function Home() {

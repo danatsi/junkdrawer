@@ -64,6 +64,7 @@ Instagram blocks/limits server-side scraping of Open Graph metadata for Reels an
 | `imdb_rating` | text | nullable, only populated for `watch`-tagged links |
 | `trailer_url` | text | nullable, only populated for `watch`-tagged links |
 | `reassurance_score` | smallint | nullable, 0-10, only populated for `read`-tagged links that are a specific book — see §3.3 step 3a |
+| `poster_url` | text | nullable, only populated for `watch`-tagged rows: the film or show's own poster, stored in our bucket. Outranks `image_url` as the row's thumbnail — see §5.5 |
 | `created_at` | timestamptz | |
 
 ### 3.3 Enrichment pipeline (runs per captured link)
@@ -268,6 +269,24 @@ A screenshot has no external URL to open, so the interaction model changes:
 - **No chevron control, and no row-body link-out.** The whole row body is the expand/collapse toggle (there's nothing else for a tap to do, since there's no link to open). A chevron icon still renders for visual affordance and rotates in sync, but any tap on the row (outside the WhatsApp icon and, once expanded, the thumbnail) toggles the panel.
 - **Expanded state** shows the extracted text/description plus a small (~56px) thumbnail of the screenshot.
 - **Tapping the small thumbnail** opens the image full-screen: a darkened backdrop (`rgba(20,16,10,0.82)` over the current screen, not a route change) with the image centered, dismissible by tapping the backdrop or a close (×) control.
+
+**When the screenshot is of a film or TV show**, the row stops looking like a screenshot and
+starts looking like the show. The vision call already tags those `watch`, which already runs the
+whole TMDb→OMDb chain (§3.3 step 4) — so the rating and the trailer were being stored and then
+thrown away by a row that rendered neither, under a tag pill hardcoded to the literal word
+"screenshot". Now:
+- the row's thumbnail is the show's **poster** (`poster_url`), because a photograph of a streaming
+  app at 44px is an unreadable smear identical to every other screenshot in the list;
+- the **IMDb rating** shows in the same score badge a `watch` link gets;
+- the tag pill shows the row's actual category, falling back to "screenshot" only when there isn't
+  one — how it arrived is not what it's about;
+- the trailer link appears in the panel, same as a link row.
+
+The screenshot itself is untouched in `image_url`: it's still what the panel shows, what the
+full-screen viewer opens, and the only copy of whatever text was on that screen. It's also what
+re-enrichment reads back out of storage, so overwriting it with the poster would have made the row
+impossible to ever re-enrich. The poster is how the row is *recognised*; the screenshot is what the
+row *holds*.
 
 ### 5.6 Sharing a screenshot to WhatsApp — different mechanism than links
 
