@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import { CORE_TAGS, type Link } from '@/lib/types'
 import { displayTitle } from '@/lib/types'
-import { ChevronIcon, ShareIcon, StarIcon } from './Icons'
+import { ChevronIcon, ShareIcon } from './Icons'
+import { ScoreBadge } from './ScoreBadge'
 import { ImageViewer } from './ImageViewer'
 import styles from './LinkRow.module.css'
 
@@ -42,7 +43,6 @@ export function ScreenshotRow({
   // hardcode the pill to "screenshot" and drop the rating on the floor, so a
   // saved show looked exactly like a saved receipt.
   const primaryTag = CORE_TAGS.find((tag) => link.tags.includes(tag))
-  const hasScore = Boolean(link.imdb_rating) || link.reassurance_score !== null
 
   async function share(e: React.MouseEvent) {
     e.stopPropagation()
@@ -85,13 +85,8 @@ export function ScreenshotRow({
               {/* A screenshot of a poster or a book cover reaches the same
                   lookups a pasted link does — the vision path feeds both the
                   watch chain and the taste scoring — so it gets the same
-                  badge. */}
-              {hasScore && (
-                <span className={styles.score}>
-                  <StarIcon />
-                  {link.imdb_rating ?? `${link.reassurance_score}/10`}
-                </span>
-              )}
+                  badge, from the same component. */}
+              <ScoreBadge link={link} />
             </div>
             <div className={styles.meta}>
               {/* What it is, when we worked that out, and only otherwise how it

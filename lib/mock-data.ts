@@ -47,6 +47,8 @@ const base = {
   enrichment: 'ok',
   enrich_error: null,
   imdb_rating: null,
+  rating_source: null,
+  imdb_id: null,
   trailer_url: null,
   poster_url: null,
   reassurance_score: null,
@@ -80,7 +82,11 @@ export const MOCK_LINKS: Link[] = [
       'drama',
       'דרמה',
     ],
+    // The other branch of the badge: OMDb had nothing, so this is TMDb's
+    // average and there's no imdb_id to link to. The badge must look exactly
+    // like the linked ones — see ScoreBadge.
     imdb_rating: '8.7',
+    rating_source: 'tmdb' as const,
     trailer_url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
     created_at: daysAgo(0),
   },
@@ -176,6 +182,8 @@ export const MOCK_LINKS: Link[] = [
     image_kind: 'photo' as const, image_url: thumb('#E2D3B4', '#BFA173'),
     tags: ['watch'],
     imdb_rating: '8.5',
+    rating_source: 'imdb' as const,
+    imdb_id: 'tt15239678',
     trailer_url: 'https://www.youtube.com/watch?v=Way9Dexny3w',
     created_at: daysAgo(4),
   },
@@ -413,6 +421,8 @@ export const MOCK_LINKS: Link[] = [
     poster_url: poster(),
     tags: ['watch'],
     imdb_rating: '8.3',
+    rating_source: 'imdb' as const,
+    imdb_id: 'tt5875444',
     trailer_url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
     extracted_text: 'Slow Horses\nSeason 4\nApple TV+\n6 episodes',
     keywords: [

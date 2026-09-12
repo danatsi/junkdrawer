@@ -2,6 +2,8 @@
    link-box-spec.md §4.2 for the anatomy. */
 
 .row {
+  /* The containing block for the stretched title link below. */
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -11,14 +13,33 @@
   padding: 11px var(--ios-gutter);
 }
 
-.rowLink {
+.rowBody {
   display: flex;
   align-items: center;
   flex: 1;
   min-width: 0;
   gap: 12px;
+  color: inherit;
+}
+
+/* The row's own link, stretched.
+   It has to be a real anchor on a small piece of text rather than a wrapper
+   around the whole row, because the score badge is itself a link to IMDb and
+   an anchor cannot contain another one. So this one covers the row with a
+   pseudo-element instead: tapping anywhere that isn't a control opens the
+   saved page, and middle-click and long-press still work because it is a
+   genuine <a href>. */
+.titleLink {
   text-decoration: none;
   color: inherit;
+}
+
+.titleLink::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  /* Below the badge and the action buttons, which lift themselves above it. */
+  z-index: 0;
 }
 
 /* iOS list thumbnails are a rounded square at the leading edge. 44pt, so the
@@ -157,6 +178,9 @@
   align-items: center;
   /* Never squeezed out by a long title — the title ellipsises instead. */
   flex: none;
+  /* Above the stretched row link, so tapping the badge is tapping the badge. */
+  position: relative;
+  z-index: 1;
   gap: 3px;
   padding: 1px 7px;
   border-radius: 999px;
@@ -169,6 +193,18 @@
 
 .score svg {
   color: var(--ios-yellow);
+}
+
+/* Deliberately identical to the badge that isn't a link. A rating that only
+   sometimes carried a chevron or an underline would make every row without an
+   imdb_id look broken, and the capsule is already a comfortable target. */
+.scoreLink {
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.scoreLink:active {
+  opacity: 0.5;
 }
 
 .meta {
@@ -224,6 +260,9 @@
   align-items: center;
   /* No gap: each button already carries a full 44pt of its own. */
   flex: none;
+  /* Above the stretched row link, or it would swallow both buttons. */
+  position: relative;
+  z-index: 1;
 }
 
 /* 44x44 of touchable area around a ~20px glyph, per HIG. The negative margin

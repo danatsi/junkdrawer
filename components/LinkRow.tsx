@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation'
 import type { Link } from '@/lib/types'
 import { displayTitle } from '@/lib/types'
 import { generatedThumb } from '@/lib/thumb'
-import { ChevronIcon, StarIcon, WhatsAppIcon } from './Icons'
+import { ChevronIcon, WhatsAppIcon } from './Icons'
+import { ScoreBadge } from './ScoreBadge'
 import styles from './LinkRow.module.css'
 
 /** wa.me can only pre-fill text, which is all a link row needs (spec §3.4).
@@ -87,13 +88,13 @@ export function LinkRow({
             swallows the pointer before the swipe-to-archive gesture ever sees
             it. Expanded rows appeared to work only because the panel is a
             plain div with nothing native to steal. */}
-        <a
-          className={styles.rowLink}
-          href={link.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          draggable={false}
-        >
+        {/* Not an anchor any more. The score badge is a link to IMDb and sits
+            inside this, and an anchor inside an anchor is invalid HTML that
+            browsers resolve by breaking one of them. So the row's own link is
+            the stretched one below: a real anchor on the title, whose ::after
+            covers the whole row. Everything that needs its own tap — the
+            badge, the two action buttons — sits above it on z-index. */}
+        <div className={styles.rowBody}>
           {thumbnail ? (
             // Arbitrary scraped hosts, and these are 44px — next/image's
             // optimizer would cost more than it saves here.
@@ -124,18 +125,19 @@ export function LinkRow({
                   "auto" picks the direction from the string's own first strong
                   character, per string, which is the only thing that can be
                   right for a mixed list. */}
-              <span
+              <a
                 dir="auto"
-                className={`${styles.title} ${placeholderTitle ? styles.pending : ''}`}
+                className={`${styles.title} ${styles.titleLink} ${
+                  placeholderTitle ? styles.pending : ''
+                }`}
+                href={link.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                draggable={false}
               >
                 {displayTitle(link)}
-              </span>
-              {hasScore && (
-                <span className={styles.score}>
-                  <StarIcon />
-                  {link.imdb_rating ?? `${link.reassurance_score}/10`}
-                </span>
-              )}
+              </a>
+              <ScoreBadge link={link} />
             </div>
             <div className={styles.meta}>
               {/* Skipped while the title is standing in for itself: on a
@@ -146,7 +148,7 @@ export function LinkRow({
               {metaDetail}
             </div>
           </div>
-        </a>
+        </div>
 
         <div className={styles.actions}>
           {/* stopPropagation so neither icon triggers the row's link-out */}

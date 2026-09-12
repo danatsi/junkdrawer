@@ -149,6 +149,8 @@ export async function enrich(link: EnrichTarget): Promise<void> {
       // TMDb's overview is a real synopsis; prefer it over the 20-word summary.
       if (movie.description) update.description = movie.description
       if (movie.imdb_rating) update.imdb_rating = movie.imdb_rating
+      if (movie.rating_source) update.rating_source = movie.rating_source
+      if (movie.imdb_id) update.imdb_id = movie.imdb_id
       if (movie.trailer_url) update.trailer_url = movie.trailer_url
       // Only the by-id path sets a title, and there it's the canonical one —
       // this row *is* that film or show, so it outranks a rephrasing of it.
@@ -223,6 +225,8 @@ export async function enrichScreenshot(input: {
       const movie = await fetchMovieData(generated.clean_title)
       if (movie.description) update.description = movie.description
       if (movie.imdb_rating) update.imdb_rating = movie.imdb_rating
+      if (movie.rating_source) update.rating_source = movie.rating_source
+      if (movie.imdb_id) update.imdb_id = movie.imdb_id
       if (movie.trailer_url) update.trailer_url = movie.trailer_url
       // The reason this path matters most: `image_url` here is the screenshot
       // itself, which at 44px is an unreadable smear of somebody's phone
@@ -275,8 +279,11 @@ const EXTENSIONS: Record<string, string> = {
  * `storage:` reference, or null if it couldn't be had. `app/page.tsx` swaps
  * that reference for a signed URL at render time, so this needs no cooperation
  * from the components.
+ *
+ * Exported for `/api/backfill-watch`, which needs to store a poster for a row
+ * without re-running the enrichment around it.
  */
-async function persistScrapedImage(imageUrl: string): Promise<string | null> {
+export async function persistScrapedImage(imageUrl: string): Promise<string | null> {
   const fetched = await fetchImage(imageUrl, MAX_SCRAPED_IMAGE_BYTES)
   if (!fetched) return null
 

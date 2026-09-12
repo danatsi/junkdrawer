@@ -61,7 +61,9 @@ Instagram blocks/limits server-side scraping of Open Graph metadata for Reels an
 | `domain` | text | parsed from URL, used for fallback tagging and display |
 | `tags` | text[] | array column — no separate tags table needed at this scale |
 | `status` | text | e.g. `unread` / `done` — used for archive/swipe actions |
-| `imdb_rating` | text | nullable, only populated for `watch`-tagged links |
+| `imdb_rating` | text | nullable, only populated for `watch`-tagged links. IMDb's number where OMDb gives one, TMDb's average where it doesn't — see §3.4 |
+| `rating_source` | text | `imdb` \| `tmdb`, which service `imdb_rating` came from |
+| `imdb_id` | text | nullable, set whenever TMDb recognised the title. Makes the score badge a link to IMDb |
 | `trailer_url` | text | nullable, only populated for `watch`-tagged links |
 | `reassurance_score` | smallint | nullable, 0-10, only populated for `read`-tagged links that are a specific book — see §3.3 step 3a |
 | `poster_url` | text | nullable, only populated for `watch`-tagged rows: the film or show's own poster, stored in our bucket. Outranks `image_url` as the row's thumbnail — see §5.5 |
@@ -86,6 +88,8 @@ Instagram blocks/limits server-side scraping of Open Graph metadata for Reels an
 4. **If tagged `watch`** (movie/TV): run the movie enrichment sub-pipeline —
    - **TMDb** (free): search by title (from clean_title or note) → get `overview` (description) and `imdb_id` (via external IDs) → get trailer via the videos endpoint (filter `type=Trailer`, `site=YouTube`) → construct `https://www.youtube.com/watch?v={key}`.
    - **OMDb** (free, 1,000 requests/day): look up by the `imdb_id` from TMDb → get the actual **IMDb rating** (distinct from TMDb's own `vote_average` — these read differently and IMDb's is what's wanted here).
+   - **TMDb's `vote_average` as the fallback.** IMDb's number is still preferred and still tried first, but for a long time it was the *only* number, and OMDb goes quiet for at least four ordinary reasons: no API key, no `imdb_id` from TMDb, a literal `"N/A"` for anything recent or any per-season TV entry, and that 1,000/day quota. Any one of them left the row with no rating at all while TMDb's average sat unread in the search response already paid for. A slightly different number beats no number, so the row takes it and records `rating_source` — which keeps a TMDb average from passing as IMDb's. A TMDb `vote_average` of `0` means nobody has voted, not a score of zero, and is treated as absent.
+   - The **poster** (`poster_path` → `poster_url`), copied into our own bucket rather than hot-linked.
 5. Store the row in Supabase.
 
 ### 3.4 WhatsApp share (client-side, no backend involvement)
@@ -192,6 +196,8 @@ while the meta line under it stays put; only the ordering inside the line flips.
 
 - Thumbnail: 44x44px, 13px radius, placeholder fill until a real image loads.
 - Score badge (watch-tagged links, and read-tagged books): small pill, accent-tinted background, star icon + number, sits inline next to the title — the *only* way a scored row differs from others at rest. A movie/TV row's number is the IMDb rating; a book's is the reassurance score (§3.3). No description or trailer link is visible until expanded.
+- **Tapping a rating opens the title on IMDb**, when `imdb_id` is known. The badge looks identical whether or not it links: a rating that sometimes carried a chevron or an underline would make every row without an id look broken, and the capsule is already a comfortable target. Only the accessible name differs, and it names the right service ("TMDb rating 8.7").
+  This is why a row's own link is a *stretched* anchor on its title rather than a wrapper around the whole row (`LinkRow`): the badge is a link, and an anchor inside an anchor is invalid HTML that browsers resolve by breaking one of them. The badge and the two action buttons lift themselves above the stretched link on `z-index`; everything else in the row falls through to it.
 - Action column (right side, always two icons, no overflow/kebab menu): WhatsApp icon (direct tap → builds and opens the wa.me link) and a chevron (direct tap → toggles the expand panel). Both are independent, single-purpose taps — no intermediate menu for either.
 
 ### 4.3 Row interactions
@@ -268,7 +274,8 @@ Same iOS Shortcut mechanism as links — the share sheet entry accepts an image 
 A screenshot has no external URL to open, so the interaction model changes:
 - **No chevron control, and no row-body link-out.** The whole row body is the expand/collapse toggle (there's nothing else for a tap to do, since there's no link to open). A chevron icon still renders for visual affordance and rotates in sync, but any tap on the row (outside the WhatsApp icon and, once expanded, the thumbnail) toggles the panel.
 - **Expanded state** shows the extracted text/description plus a small (~56px) thumbnail of the screenshot.
-- **Tapping the small thumbnail** opens the image full-screen: a darkened backdrop (`rgba(20,16,10,0.82)` over the current screen, not a route change) with the image centered, dismissible by tapping the backdrop or a close (×) control.
+- **Tapping the small thumbnail** opens the image full-screen: a darkened backdrop over the current screen (not a route change) with the image centered, dismissible by tapping the backdrop, a close (×) control, Escape, or by **pulling the image away**.
+- **Pull to dismiss**, as iOS Photos does it: the image follows the finger, and the scrim and the close control fade while the image scales down, so the list showing through underneath is what tells you the gesture is working. Past ~110px, or on a fast flick, it closes; short of that it springs back. Up as well as down — the gesture means "get this out of the way", and which way you flick it is not information.
 
 **When the screenshot is of a film or TV show**, the row stops looking like a screenshot and
 starts looking like the show. The vision call already tags those `watch`, which already runs the

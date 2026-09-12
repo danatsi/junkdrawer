@@ -11,12 +11,21 @@ import 'server-only'
  * or an OMDb outage, must still produce a normal row — so nothing in here
  * throws, and a partial result is a valid result.
  */
+export type RatingSource = 'imdb' | 'tmdb'
+
 export interface MovieData {
   /** Only set by the by-id path, where the title is authoritative rather than
    *  something we searched for. */
   title?: string
   description?: string
   imdb_rating?: string
+  /** Which service the number came from. IMDb's and TMDb's read differently,
+   *  so a row has to know: it decides what the badge is called and whether it
+   *  can link anywhere. */
+  rating_source?: RatingSource
+  /** Kept so the badge can open the title on IMDb. Available whenever TMDb
+   *  knows the title, independently of whether OMDb answered. */
+  imdb_id?: string
   trailer_url?: string
   /** The show's own poster. For a screenshot row this is the whole point: what
    *  was saved is a photograph of a phone screen, and the thing it's *about*
@@ -57,13 +66,40 @@ export async function fetchMovieData(title: string): Promise<MovieData> {
   ])
 
   const imdbId = externalIds?.imdb_id || undefined
+  const rating = pickRating(imdbId ? (await fetchOmdb(imdbId))?.rating : undefined, hit.vote_average)
 
   return {
     description: hit.overview?.trim() || undefined,
     trailer_url: pickTrailer(videos?.results),
-    imdb_rating: imdbId ? (await fetchOmdb(imdbId))?.rating : undefined,
+    imdb_rating: rating?.value,
+    rating_source: rating?.source,
+    imdb_id: imdbId,
     poster_url: posterUrl(hit.poster_path),
   }
+}
+
+/**
+ * The rating, from whichever service will give us one.
+ *
+ * IMDb's is still the number wanted (spec §3.4), and it's still tried first.
+ * But it was for a long time the *only* number: OMDb is the sole source of it,
+ * and OMDb goes quiet for at least four ordinary reasons — no API key, no
+ * imdb_id from TMDb, a literal "N/A" for anything recent or any per-season TV
+ * entry, and a 1,000/day quota. Any of those and the row showed no rating at
+ * all, while TMDb's own average sat unread in the search response we had
+ * already paid for. A slightly different number beats no number.
+ */
+function pickRating(
+  omdbRating: string | undefined,
+  tmdbVote: number | undefined,
+): { value: string; source: RatingSource } | undefined {
+  if (omdbRating) return { value: omdbRating, source: 'imdb' }
+  // TMDb reports 0 for a title nobody has voted on, which is an absence rather
+  // than a score of zero — and would render as a confident "0.0".
+  if (typeof tmdbVote === 'number' && tmdbVote > 0) {
+    return { value: tmdbVote.toFixed(1), source: 'tmdb' }
+  }
+  return undefined
 }
 
 /**
@@ -104,11 +140,17 @@ export async function fetchMovieDataByImdbId(imdbId: string): Promise<MovieData>
         )
       : undefined
 
+  const rating = pickRating(omdb?.rating, hit?.vote_average)
+
   return {
     // OMDb's is the title IMDb itself shows, which is what the saved link said.
     title: omdb?.title ?? hit?.title,
     description: hit?.overview?.trim() || omdb?.plot,
-    imdb_rating: omdb?.rating,
+    imdb_rating: rating?.value,
+    rating_source: rating?.source,
+    // The id this whole lookup was keyed on, so it's known even when both
+    // OMDb and TMDb come back with nothing.
+    imdb_id: imdbId,
     trailer_url: pickTrailer(videos?.results),
     poster_url: posterUrl(hit?.poster_path),
   }
@@ -126,6 +168,7 @@ async function findByImdbId(
       title?: string
       overview?: string
       poster_path?: string | null
+      vote_average?: number
     }
   | undefined
 > {
@@ -141,6 +184,7 @@ async function findByImdbId(
       title: movie.title,
       overview: movie.overview,
       poster_path: movie.poster_path,
+      vote_average: movie.vote_average,
     }
   }
 
@@ -152,6 +196,7 @@ async function findByImdbId(
       title: tv.name,
       overview: tv.overview,
       poster_path: tv.poster_path,
+      vote_average: tv.vote_average,
     }
   }
 
@@ -165,6 +210,7 @@ interface TmdbFound {
   name?: string
   overview?: string
   poster_path?: string | null
+  vote_average?: number
 }
 
 interface TmdbHit {
@@ -173,6 +219,7 @@ interface TmdbHit {
   overview?: string
   popularity?: number
   poster_path?: string | null
+  vote_average?: number
 }
 
 interface TmdbVideo {

@@ -102,6 +102,8 @@ create table links (
   reassurance_score smallint,                       -- 0-10, read-tagged books only
   reassurance_reason text,                          -- one sentence saying why, moves with the score
   poster_url    text,                               -- the show's own poster; outranks image_url as the thumbnail
+  rating_source text,                               -- imdb | tmdb, which service imdb_rating came from
+  imdb_id       text,                               -- set whenever TMDb knew the title; makes the badge a link
   created_at    timestamptz not null default now()
 );
 
@@ -182,6 +184,16 @@ Rows sorted `created_at desc`, `status = 'unread'` only.
   **screenshot** of a film or show reaches all of it (spec §5.5). That was already true for the
   rating and the trailer — the screenshot row just rendered neither, and hardcoded its tag pill to
   the word "screenshot", so a saved show looked exactly like a saved receipt.
+- The rating **falls back to TMDb's `vote_average`** when OMDb doesn't answer, and the row records
+  which service it got (spec §3.4). OMDb was the single source, and it goes quiet for four ordinary
+  reasons — no key, no `imdb_id`, an `"N/A"`, the 1,000/day quota — each of which left the row with
+  no rating at all.
+- **`POST /api/backfill-watch`** fills these in on rows that predate them. Deliberately *not* a
+  re-run of enrichment, for the reason `/api/reindex` documents: that would re-scrape the page,
+  re-hit Gemini and overwrite a good title with whatever the site serves today. It runs the watch
+  sub-pipeline alone, keyed on the title the row already has, and writes only the five fields that
+  sub-pipeline owns — additively, so an existing rating is kept unless `?force=1`. Incremental and
+  reports `remaining`, like reindex.
 
 **Done when:** saving an IMDb or Netflix URL yields a row with a star badge and a working trailer link.
 

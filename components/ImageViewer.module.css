@@ -4,11 +4,22 @@
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.92);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 50;
+  /* The image is dragged vertically, so the browser must not claim that
+     gesture for scrolling or for pull-to-refresh first. */
+  touch-action: none;
+  overscroll-behavior: contain;
+}
+
+/* Separate from the overlay so it can fade with the drag while the overlay's
+   own opacity stays the enter/exit transition's to animate. */
+.scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.92);
 }
 
 .close {
@@ -37,8 +48,15 @@
 }
 
 .image {
+  position: relative;
   width: 100%;
   max-width: 100%;
   max-height: 88vh;
   object-fit: contain;
+  cursor: grab;
+  -webkit-user-drag: none;
+}
+
+.image:active {
+  cursor: grabbing;
 }

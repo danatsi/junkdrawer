@@ -30,6 +30,13 @@ export interface Link {
   keywords: string[]
   status: LinkStatus
   imdb_rating: string | null
+  /** Which service `imdb_rating` came from. IMDb's number is preferred and
+   *  tried first, but it has a single fragile source (OMDb), so TMDb's own
+   *  average stands in rather than leaving the row unrated. */
+  rating_source: 'imdb' | 'tmdb' | null
+  /** Set whenever TMDb recognised the title, rating or no rating. What makes
+   *  the score badge a link to IMDb. */
+  imdb_id: string | null
   trailer_url: string | null
   /** The film or show's own poster, `watch`-tagged rows only. Outranks
    *  `image_url` as the row's thumbnail — on a screenshot row especially,
