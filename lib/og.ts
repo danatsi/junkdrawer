@@ -36,7 +36,30 @@ const USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
   '(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
 
-export async function fetchOpenGraph(url: string): Promise<OgData> {
+/**
+ * The fetch on its own, with the outcome described rather than collapsed to
+ * empty data.
+ *
+ * `fetchOpenGraph` only ever needed "did I get usable HTML", but the price
+ * work needs to know *how* a fetch failed — a 403 from a bot wall and a 200
+ * carrying an interstitial call for completely different answers, and telling
+ * them apart is the whole question (see `/api/price-probe`). Exported so the
+ * two callers share one set of headers and one byte cap.
+ */
+export interface FetchedPage {
+  ok: boolean
+  status: number
+  contentType: string
+  html: string
+  /** After redirects, which is what relative URLs resolve against. */
+  finalUrl: string
+  /** Set when the request never completed: timeout, DNS, TLS, refusal. */
+  error?: string
+}
+
+export async function fetchPage(url: string): Promise<FetchedPage> {
+  const empty = { ok: false, status: 0, contentType: '', html: '', finalUrl: url }
+
   let response: Response
   try {
     response = await fetch(url, {
@@ -48,25 +71,42 @@ export async function fetchOpenGraph(url: string): Promise<OgData> {
         'accept-language': 'en-US,en;q=0.9',
       },
     })
-  } catch {
+  } catch (cause) {
     // Timeout, DNS failure, refused connection, bad TLS.
-    return {}
+    return { ...empty, error: cause instanceof Error ? cause.message : String(cause) }
   }
 
-  if (!response.ok) return {}
-
-  // A PDF or an image would parse into meaningless soup.
   const contentType = response.headers.get('content-type') ?? ''
-  if (!/text\/html|application\/xhtml\+xml/i.test(contentType)) return {}
-
-  let html: string
-  try {
-    html = await readCapped(response)
-  } catch {
-    return {}
+  const finalUrl = response.url || url
+  // A PDF or an image would parse into meaningless soup.
+  const isHtml = /text\/html|application\/xhtml\+xml/i.test(contentType)
+  if (!response.ok || !isHtml) {
+    return { ok: false, status: response.status, contentType, html: '', finalUrl }
   }
 
-  return parseOpenGraph(html, response.url || url)
+  try {
+    return {
+      ok: true,
+      status: response.status,
+      contentType,
+      html: await readCapped(response),
+      finalUrl,
+    }
+  } catch (cause) {
+    return {
+      ...empty,
+      status: response.status,
+      contentType,
+      finalUrl,
+      error: cause instanceof Error ? cause.message : String(cause),
+    }
+  }
+}
+
+export async function fetchOpenGraph(url: string): Promise<OgData> {
+  const page = await fetchPage(url)
+  if (!page.ok) return {}
+  return parseOpenGraph(page.html, page.finalUrl)
 }
 
 /** Exported for its own sake: parsing is the part worth testing without a
