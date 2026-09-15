@@ -1,7 +1,7 @@
 import { NextResponse, after } from 'next/server'
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase'
-import { enrich, enrichScreenshot } from '@/lib/enrich'
-import { downloadImage, parseStorageRef } from '@/lib/storage'
+import type { LinkType } from '@/lib/types'
+import { reenrich } from '@/lib/enrich'
 
 /** Same budget as capture — it runs the same three steps. */
 export const maxDuration = 60
@@ -46,30 +46,16 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   const rowId = data.id as string
   const note = (data.note as string | null) ?? null
 
-  after(async () => {
-    // A screenshot has no page to scrape and its `url` is a synthetic
-    // identifier, so re-running the link pipeline over it produces a title
-    // from the note alone — which is how a Blade Runner 2049 screenshot came
-    // back as "Television show recommendation". Fetch the image back out of
-    // storage and re-run the vision path instead.
-    if (data.type === 'screenshot') {
-      const ref = parseStorageRef((data.image_url as string | null) ?? null)
-      if (!ref) {
-        console.error('enrich: screenshot row has no usable image ref', rowId)
-        return
-      }
-      const { image, mimeType } = await downloadImage(ref.bucket, ref.path)
-      await enrichScreenshot({ id: rowId, image, mimeType, note })
-      return
-    }
-
-    await enrich({
+  after(() =>
+    reenrich({
       id: rowId,
       url: data.url as string,
       note,
       domain: (data.domain as string | null) ?? null,
-    })
-  })
+      type: data.type as LinkType,
+      image_url: (data.image_url as string | null) ?? null,
+    }),
+  )
 
   return NextResponse.json({ id, enrichment: 'pending' }, { status: 202 })
 }

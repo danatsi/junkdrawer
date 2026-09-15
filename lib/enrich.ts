@@ -4,11 +4,11 @@ import { getSupabase, isSupabaseConfigured } from './supabase'
 import { fetchOpenGraph, isPlaceholderTitle, mergeOg, type OgData } from './og'
 import { ensureFavicon } from './icons'
 import { fetchImage } from './fetch-image'
-import { uploadImage } from './storage'
+import { downloadImage, parseStorageRef, uploadImage } from './storage'
 import { searchQueryOf } from './url'
 import { generateFromImage, generateMetadata, isGeminiConfigured } from './gemini'
 import { extractImdbId, fetchMovieData, fetchMovieDataByImdbId, type MovieData } from './movies'
-import type { Link } from './types'
+import type { Link, LinkType } from './types'
 
 /**
  * The enrichment orchestrator (PLAN §4). Runs after the capture endpoint has
@@ -185,6 +185,50 @@ export async function enrich(link: EnrichTarget): Promise<void> {
       enrich_error: message.slice(0, 500),
     })
   }
+}
+
+/** A row that already exists and is being run through enrichment again. */
+export interface ReenrichTarget {
+  id: string
+  url: string
+  note: string | null
+  domain: string | null
+  type: LinkType
+  image_url: string | null
+}
+
+/**
+ * Re-runs the right pipeline for an existing row, which is not the same as
+ * running `enrich` on it.
+ *
+ * A screenshot has no page to scrape and its `url` is a synthetic identifier,
+ * so the link pipeline titles it from the note alone — which is how a Blade
+ * Runner 2049 screenshot came back as "Television show recommendation". The
+ * image has to be fetched back out of storage and put through the vision path
+ * instead. Shared by the single-row retry and the bulk route so that rule
+ * can't hold in one of them and not the other.
+ */
+export async function reenrich(row: ReenrichTarget): Promise<void> {
+  if (row.type !== 'screenshot') {
+    await enrich({ id: row.id, url: row.url, note: row.note, domain: row.domain })
+    return
+  }
+
+  const ref = parseStorageRef(row.image_url)
+  if (!ref) {
+    // Nothing to re-read. Recorded on the row rather than only in the logs,
+    // since a bulk run reports counts and this would otherwise look like a
+    // success.
+    console.error('enrich: screenshot row has no usable image ref', row.id)
+    await save(row.id, {
+      enrichment: 'failed',
+      enrich_error: 'screenshot row has no stored image to re-read',
+    })
+    return
+  }
+
+  const { image, mimeType } = await downloadImage(ref.bucket, ref.path)
+  await enrichScreenshot({ id: row.id, image, mimeType, note: row.note })
 }
 
 /**
