@@ -85,6 +85,17 @@ export async function POST(request: Request) {
     }
 
     try {
+      // Flip the row to `pending` before working on it, the way the single-row
+      // retry does. That is the only thing that makes a bulk run visible: the
+      // list renders a pending row as "adding details" and polls while any
+      // exists, so the drawer shows the run moving through it instead of
+      // sitting unchanged until a reload. Per row rather than for the whole
+      // batch, so what is marked as working actually is.
+      await getSupabase()
+        .from('links')
+        .update({ enrichment: 'pending', enrich_error: null })
+        .eq('id', row.id)
+
       await reenrich(row)
       // `enrich` doesn't throw — it catches its own failures and records them
       // on the row — so the only honest way to know how a row came out is to
@@ -106,9 +117,15 @@ export async function POST(request: Request) {
       }
     } catch (cause) {
       // Only the screenshot path throws — a bucket that won't hand the image
-      // back. `reenrich` has already marked the row.
+      // back. Recorded on the row rather than only counted, because the
+      // `pending` set above would otherwise be left standing and the row would
+      // claim to be working on nothing.
       const message = cause instanceof Error ? cause.message : String(cause)
       console.error(`enrich-all: failed for ${row.id}:`, message)
+      await getSupabase()
+        .from('links')
+        .update({ enrichment: 'failed', enrich_error: message.slice(0, 500) })
+        .eq('id', row.id)
       failed += 1
       consecutiveFailures += 1
     }
